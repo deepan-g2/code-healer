@@ -161,6 +161,13 @@ module CodeHealer
         
         return unless Dir.exist?(workspace_path)
         
+        # Remove .git directory first to avoid conflicts
+        git_dir = File.join(workspace_path, '.git')
+        if Dir.exist?(git_dir)
+          puts "🧹 [WORKSPACE] Removing .git directory to prevent conflicts..."
+          FileUtils.rm_rf(git_dir)
+        end
+        
         puts "🧹 [WORKSPACE] Removing workspace directory..."
         FileUtils.rm_rf(workspace_path)
         puts "🧹 [WORKSPACE] Workspace cleanup completed"
@@ -207,10 +214,9 @@ module CodeHealer
           puts "🌿 [WORKSPACE] Clone result: #{result ? 'SUCCESS' : 'FAILED'}"
           
           if result
-            puts "🌿 [WORKSPACE] Removing .git to avoid conflicts..."
-            # Remove .git to avoid conflicts
-            FileUtils.rm_rf(File.join(workspace_path, '.git'))
-            puts "🌿 [WORKSPACE] .git removed successfully"
+            puts "🌿 [WORKSPACE] Git repository preserved for healing operations"
+            # Keep .git for Git operations during healing
+            # We'll clean it up later in cleanup_workspace
           else
             puts "🌿 [WORKSPACE] Clone failed, checking workspace..."
             puts "🌿 [WORKSPACE] Workspace exists: #{Dir.exist?(workspace_path)}"
@@ -237,6 +243,7 @@ module CodeHealer
               checkout_result = system("git checkout #{current_branch}")
               puts "🌿 [WORKSPACE] Checkout result: #{checkout_result ? 'SUCCESS' : 'FAILED'}"
             end
+            puts "🌿 [WORKSPACE] Git repository preserved for healing operations"
           else
             puts "🌿 [WORKSPACE] Full repo clone failed"
           end
