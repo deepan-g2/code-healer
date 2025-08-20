@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.7] - 2025-01-14
+## [0.1.8] - 2025-01-14
+
+### Changed
+- **Production safety** - Healing workspace no longer modifies main directory directly
+- **Git workflow** - Changes are applied to isolated healing branches only
+- **Pull request automation** - Automatic PR creation when configured
+- **Method renaming** - `merge_fixes_back` → `create_healing_branch` for clarity
 
 ### Fixed
 - **Git operations in isolated healing workspace** - Preserved .git directory during cloning for proper Git operations

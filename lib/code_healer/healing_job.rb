@@ -33,7 +33,7 @@ module CodeHealer
 
           if test_success
             # Merge back to main repo
-            healing_branch = CodeHealer::HealingWorkspaceManager.merge_fixes_back(
+            healing_branch = CodeHealer::HealingWorkspaceManager.create_healing_branch(
               Rails.root.to_s,
               workspace_path,
               CodeHealer::ConfigManager.git_settings['pr_target_branch'] || 'main'
