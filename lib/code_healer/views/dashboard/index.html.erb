@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CodeHealer Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header h1 { margin: 0; color: #2c3e50; }
+    .header p { margin: 10px 0 0 0; color: #7f8c8d; }
+    
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .metric-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .metric-card h3 { margin: 0 0 10px 0; color: #2c3e50; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-card .value { font-size: 32px; font-weight: bold; color: #3498db; margin: 0; }
+    .metric-card .label { color: #7f8c8d; font-size: 12px; margin: 5px 0 0 0; }
+    
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .chart-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .chart-card h3 { margin: 0 0 20px 0; color: #2c3e50; }
+    
+    .recent-healings { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .recent-healings h3 { margin: 0 0 20px 0; color: #2c3e50; }
+    .healing-item { padding: 15px; border-bottom: 1px solid #ecf0f1; }
+    .healing-item:last-child { border-bottom: none; }
+    .healing-item .class-method { font-weight: bold; color: #2c3e50; }
+    .healing-item .error { color: #e74c3c; font-size: 14px; }
+    .healing-item .status { color: #27ae60; font-size: 12px; }
+    .healing-item .time { color: #7f8c8d; font-size: 12px; }
+    
+    .success { color: #27ae60; }
+    .warning { color: #f39c12; }
+    .danger { color: #e74c3c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 CodeHealer Dashboard</h1>
+      <p>Intelligent Code Healing Analytics & Insights</p>
+    </div>
+    
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <h3>Total Healings</h3>
+        <div class="value"><%= @summary[:total_healings] %></div>
+        <div class="label">All time</div>
+      </div>
+      
+      <div class="metric-card">
+        <h3>Success Rate</h3>
+        <div class="value <%= @summary[:success_rate] >= 80 ? 'success' : (@summary[:success_rate] >= 60 ? 'warning' : 'danger') %>">
+          <%= @summary[:success_rate] %>%
+        </div>
+        <div class="label">Healing success</div>
+      </div>
+      
+      <div class="metric-card">
+        <h3>Today</h3>
+        <div class="value"><%= @summary[:healings_today] %></div>
+        <div class="label">Healings today</div>
+      </div>
+      
+      <div class="metric-card">
+        <h3>This Week</h3>
+        <div class="value"><%= @summary[:healings_this_week] %></div>
+        <div class="label">Healings this week</div>
+      </div>
+      
+      <div class="metric-card">
+        <h3>This Month</h3>
+        <div class="value"><%= @summary[:healings_this_month] %></div>
+        <div class="label">Healings this month</div>
+      </div>
+      
+      <div class="metric-card">
+        <h3>Avg Resolution</h3>
+        <div class="value">
+          <%= @summary[:average_resolution_time] ? "#{(@summary[:average_resolution_time] / 1000.0).round(2)}s" : "N/A" %>
+        </div>
+        <div class="label">Average time to fix</div>
+      </div>
+    </div>
+    
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Daily Healing Trend (Last 7 Days)</h3>
+        <canvas id="dailyTrendChart"></canvas>
+      </div>
+      
+      <div class="chart-card">
+        <h3>Evolution Method Distribution</h3>
+        <canvas id="evolutionMethodsChart"></canvas>
+      </div>
+    </div>
+    
+    <div class="recent-healings">
+      <h3>Recent Healings</h3>
+      <% @recent_healings.each do |healing| %>
+        <div class="healing-item">
+          <div class="class-method"><%= healing.class_name %>#<%= healing.method_name %></div>
+          <div class="error"><%= healing.error_class %>: <%= healing.error_message&.truncate(100) %></div>
+          <div class="status">
+            <%= healing.success_status %> | 
+            <%= healing.evolution_method_display %> | 
+            <%= healing.ai_provider_display %>
+          </div>
+          <div class="time"><%= healing.created_at.strftime("%Y-%m-%d %H:%M:%S") %></div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+  
+  <script>
+    // Daily Trend Chart
+    const dailyTrendCtx = document.getElementById('dailyTrendChart').getContext('2d');
+    new Chart(dailyTrendCtx, {
+      type: 'line',
+      data: {
+        labels: <%= raw @summary[:daily_trend].keys.map { |date| Date.parse(date).strftime("%m/%d") }.to_json %>,
+        datasets: [{
+          label: 'Healings',
+          data: <%= raw @summary[:daily_trend].values.to_json %>,
+          borderColor: '#3498db',
+          backgroundColor: 'rgba(52, 152, 219, 0.1)',
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+      }
+    });
+    
+    // Evolution Methods Chart
+    const evolutionMethodsCtx = document.getElementById('evolutionMethodsChart').getContext('2d');
+    new Chart(evolutionMethodsCtx, {
+      type: 'doughnut',
+      data: {
+        labels: <%= raw @summary[:evolution_methods].keys.map(&:titleize).to_json %>,
+        datasets: [{
+          data: <%= raw @summary[:evolution_methods].values.to_json %>,
+          backgroundColor: ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

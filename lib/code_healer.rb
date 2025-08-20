@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "code_healer/version"
+require_relative "code_healer/engine"
 
 # Require external gems explicitly
 require 'openai'
@@ -27,6 +28,12 @@ autoload :McpServer, "code_healer/mcp_server"
 autoload :McpTools, "code_healer/mcp_tools"
 autoload :McpPrompts, "code_healer/mcp_prompts"
 autoload :MCP, "code_healer/mcp"
+
+# Dashboard components
+autoload :HealingMetric, "code_healer/models/healing_metric"
+autoload :MetricsCollector, "code_healer/services/metrics_collector"
+autoload :DashboardController, "code_healer/controllers/dashboard_controller"
+autoload :Installer, "code_healer/installer"
 
 # Rails integration
 if defined?(Rails)
