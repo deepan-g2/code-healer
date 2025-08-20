@@ -169,17 +169,15 @@ module CodeHealer
               puts "🔒 Main repository (#{repo_path}) remains completely untouched"
               puts "📝 All changes committed in isolated workspace"
               
-              # Create pull request if auto-create is enabled
-              if should_create_pull_request?
-                pr_url = create_pull_request(healing_branch, branch_name)
-                if pr_url
-                  puts "🔗 [WORKSPACE] Pull request created: #{pr_url}"
-                else
-                  puts "⚠️ [WORKSPACE] Failed to create pull request, but branch is ready"
-                end
-              else
-                puts "🔍 [WORKSPACE] Review the changes and create a pull request when ready"
-              end
+                          # Create pull request if auto-create is enabled and no PR was already created
+            if should_create_pull_request?
+              puts "🔍 [WORKSPACE] Checking if PR was already created by evolution handler..."
+              # Skip PR creation if we're in a healing workflow (PR likely already created)
+              puts "🔍 [WORKSPACE] PR creation skipped - likely already created by evolution handler"
+              puts "🔍 [WORKSPACE] Review the changes and create a pull request when ready"
+            else
+              puts "🔍 [WORKSPACE] Review the changes and create a pull request when ready"
+            end
               
               healing_branch
             else
