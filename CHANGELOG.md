@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2025-01-14
+
+### Fixed
+- **Repository cloning** - Now clones from GitHub remote URL instead of local path
+- **Git remote configuration** - Ensures workspace has correct GitHub remote for PR creation
+- **Debug information** - Added Git remote and branch debugging in workspace operations
+
+## [0.1.10] - 2025-01-14
+
+### Changed
+- **Complete workspace isolation** - All Git operations now happen in isolated workspace only
+- **No file copying** - Removed file copying between workspace and main repo
+- **Direct PR creation** - Pull requests are created directly from the isolated workspace
+- **Main repo protection** - Main repository is never touched, only the isolated workspace
+
+### Fixed
+- **Git commit workflow** - Added proper change detection before committing
+- **Empty branch prevention** - Delete healing branches when no changes are detected
+- **Enhanced debugging** - Added Git status and diff logging throughout the process
+
 ## [0.1.8] - 2025-01-14
 
 ### Changed

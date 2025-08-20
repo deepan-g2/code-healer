@@ -78,6 +78,14 @@ module CodeHealer
             apply_fix_to_file(file_path, fix[:new_code], class_name, method_name)
           end
           
+          # Show workspace Git status after applying fixes
+          Dir.chdir(workspace_path) do
+            puts "🔧 [WORKSPACE] Git status after fixes:"
+            system("git status --porcelain")
+            puts "🔧 [WORKSPACE] Git diff after fixes:"
+            system("git diff")
+          end
+          
           puts "✅ Fixes applied successfully in workspace"
           true
         rescue => e
@@ -121,51 +129,74 @@ module CodeHealer
       end
       
       def create_healing_branch(repo_path, workspace_path, branch_name)
-        puts "🔄 Creating healing branch for code review"
+        puts "🔄 Creating healing branch and PR from isolated workspace"
         
         begin
-          # Create healing branch in main repo
-          Dir.chdir(repo_path) do
+          # All Git operations happen in the isolated workspace
+          Dir.chdir(workspace_path) do
+            puts "🌿 [WORKSPACE] Working in isolated workspace: #{workspace_path}"
+            
+            # Debug Git configuration
+            puts "🌿 [WORKSPACE] Git remote origin: #{`git config --get remote.origin.url`.strip}"
+            puts "🌿 [WORKSPACE] Current branch: #{`git branch --show-current`.strip}"
+            
             # Ensure we're on the target branch
             system("git checkout #{branch_name}")
             system("git pull origin #{branch_name}")
             
-            # Create healing branch
+            # Create healing branch in the workspace
             healing_branch = "code-healer-fix-#{Time.now.to_i}"
             system("git checkout -b #{healing_branch}")
             
-            # Copy fixed files from workspace to the new branch
-            # This is safe as we're on a new branch, not the main branch
-            copy_fixed_files(workspace_path, repo_path)
+            # Check Git status
+            puts "📊 [WORKSPACE] Git status in workspace:"
+            system("git status --porcelain")
             
-            # Commit changes to the healing branch
+            # Add all changes (the fixes are already applied in the workspace)
             system("git add .")
-            commit_message = "Fix applied by CodeHealer: #{Time.now.strftime('%Y-%m-%d %H:%M:%S')}"
-            system("git commit -m '#{commit_message}'")
             
-            # Push healing branch (this doesn't affect the main branch)
-            system("git push origin #{healing_branch}")
-            
-            puts "✅ Healing branch created: #{healing_branch}"
-            puts "🔒 Main branch (#{branch_name}) remains unchanged"
-            puts "📝 Changes are now available in branch: #{healing_branch}"
-            
-            # Create pull request if auto-create is enabled
-            if should_create_pull_request?
-              pr_url = create_pull_request(healing_branch, branch_name)
-              if pr_url
-                puts "🔗 Pull request created: #{pr_url}"
+            # Check if there are changes to commit
+            if system("git diff --cached --quiet") == false
+              puts "📝 [WORKSPACE] Changes detected, committing to healing branch..."
+              commit_message = "Fix applied by CodeHealer: #{Time.now.strftime('%Y-%m-%d %H:%M:%S')}"
+              system("git commit -m '#{commit_message}'")
+              
+              # Push healing branch from workspace
+              puts "🚀 [WORKSPACE] Pushing healing branch from workspace..."
+              system("git push origin #{healing_branch}")
+              
+              puts "✅ [WORKSPACE] Healing branch created and pushed: #{healing_branch}"
+              puts "🔒 Main repository (#{repo_path}) remains completely untouched"
+              puts "📝 All changes committed in isolated workspace"
+              
+              # Create pull request if auto-create is enabled
+              if should_create_pull_request?
+                pr_url = create_pull_request(healing_branch, branch_name)
+                if pr_url
+                  puts "🔗 [WORKSPACE] Pull request created: #{pr_url}"
+                else
+                  puts "⚠️ [WORKSPACE] Failed to create pull request, but branch is ready"
+                end
               else
-                puts "⚠️ Failed to create pull request, but branch is ready"
+                puts "🔍 [WORKSPACE] Review the changes and create a pull request when ready"
               end
+              
+              healing_branch
             else
-              puts "🔍 Review the changes and create a pull request when ready"
+              puts "⚠️ [WORKSPACE] No changes detected in workspace"
+              puts "🔍 This might indicate that:"
+              puts "   - The fixes were not applied to the workspace"
+              puts "   - There was an issue with the healing process"
+              
+              # Delete the empty branch
+              system("git checkout #{branch_name}")
+              system("git branch -D #{healing_branch}")
+              puts "🗑️ [WORKSPACE] Deleted empty healing branch: #{healing_branch}"
+              nil
             end
-            
-            healing_branch
           end
         rescue => e
-          puts "❌ Failed to create healing branch: #{e.message}"
+          puts "❌ Failed to create healing branch from workspace: #{e.message}"
           nil
         end
       end
@@ -268,10 +299,20 @@ module CodeHealer
         Dir.chdir(repo_path) do
           current_branch = branch_name || `git branch --show-current`.strip
           puts "🌿 [WORKSPACE] Current branch: #{current_branch}"
-          puts "🌿 [WORKSPACE] Executing: git clone --single-branch --branch #{current_branch} #{repo_path} #{workspace_path}"
           
-          # Clone only the current branch
-          result = system("git clone --single-branch --branch #{current_branch} #{repo_path} #{workspace_path}")
+          # Get the GitHub remote URL instead of local path
+          remote_url = `git config --get remote.origin.url`.strip
+          puts "🌿 [WORKSPACE] Remote origin URL: #{remote_url}"
+          
+          if remote_url.empty?
+            puts "❌ [WORKSPACE] No remote origin found in #{repo_path}"
+            return false
+          end
+          
+          puts "🌿 [WORKSPACE] Executing: git clone --single-branch --branch #{current_branch} #{remote_url} #{workspace_path}"
+          
+          # Clone from GitHub remote URL, not local path
+          result = system("git clone --single-branch --branch #{current_branch} #{remote_url} #{workspace_path}")
           puts "🌿 [WORKSPACE] Clone result: #{result ? 'SUCCESS' : 'FAILED'}"
           
           if result
@@ -291,10 +332,20 @@ module CodeHealer
         Dir.chdir(repo_path) do
           current_branch = branch_name || `git branch --show-current`.strip
           puts "🌿 [WORKSPACE] Target branch: #{current_branch}"
-          puts "🌿 [WORKSPACE] Executing: git clone #{repo_path} #{workspace_path}"
           
-          # Clone full repo
-          result = system("git clone #{repo_path} #{workspace_path}")
+          # Get the GitHub remote URL instead of local path
+          remote_url = `git config --get remote.origin.url`.strip
+          puts "🌿 [WORKSPACE] Remote origin URL: #{remote_url}"
+          
+          if remote_url.empty?
+            puts "❌ [WORKSPACE] No remote origin found in #{repo_path}"
+            return false
+          end
+          
+          puts "🌿 [WORKSPACE] Executing: git clone #{remote_url} #{workspace_path}"
+          
+          # Clone from GitHub remote URL, not local path
+          result = system("git clone #{remote_url} #{workspace_path}")
           puts "🌿 [WORKSPACE] Clone result: #{result ? 'SUCCESS' : 'FAILED'}"
           
           if result
@@ -334,18 +385,10 @@ module CodeHealer
         Dir.glob("**/*.rb")
       end
       
-      def copy_fixed_files(workspace_path, repo_path)
-        # Copy all Ruby files from workspace to repo
-        Dir.glob(File.join(workspace_path, "**/*.rb")).each do |workspace_file|
-          relative_path = workspace_file.sub(workspace_path + "/", "")
-          repo_file = File.join(repo_path, relative_path)
-          
-          if File.exist?(repo_file)
-            FileUtils.cp(workspace_file, repo_file)
-            puts "📁 Copied fixed file: #{relative_path}"
-          end
-        end
-      end
+      # This method is no longer needed since we work entirely in the isolated workspace
+      # def copy_fixed_files(workspace_path, repo_path)
+      #   # Removed - no longer copying files between directories
+      # end
       
       def workspace_expired?(workspace_path, hours)
         return false unless hours && hours > 0
