@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.5] - 2025-01-14
+## [0.1.6] - 2025-01-14
+
+### Added
+- **Code heal directory permission validation** during interactive setup
+- **Repository access testing** to ensure the directory can clone and push to the target repo
+- **Write permission verification** for the code heal directory
+- **Automatic directory creation** if it doesn't exist
+- **Comprehensive error messages** with troubleshooting tips for permission issues
 
 ### Fixed
 - **Duplicate HealingJob class definition** that was preventing isolated healing workspace system from working
