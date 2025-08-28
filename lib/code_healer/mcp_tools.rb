@@ -1,3 +1,6 @@
+require 'httparty'
+require 'cgi'
+
 module CodeHealer
   # Tool for analyzing errors with context
   class ErrorAnalysisTool < MCP::Tool
@@ -1522,9 +1525,14 @@ module CodeHealer
       return { error: "Ticket ID required" } unless ticket_id
       
       begin
-        # Simulate JIRA API call - in production, this would use actual JIRA REST API
-        if simulate_jira_available?
-          ticket_data = simulate_jira_ticket(ticket_id)
+        # Try real JIRA API first, fallback to simulation if it fails
+        if jira_api_available?
+          ticket_data = get_real_jira_ticket(ticket_id)
+          
+          if ticket_data[:error]
+            puts "⚠️  Real JIRA API failed, falling back to simulation: #{ticket_data[:error]}"
+            ticket_data = simulate_jira_ticket(ticket_id)
+          end
           
           {
             ticket_id: ticket_id,
@@ -1590,8 +1598,13 @@ module CodeHealer
       return { error: "Project key required" } unless project_key
       
       begin
-        if simulate_jira_available?
-          project_data = simulate_jira_project(project_key)
+        if jira_api_available?
+          project_data = get_real_jira_project(project_key)
+          
+          if project_data[:error]
+            puts "⚠️  Real JIRA API failed, falling back to simulation: #{project_data[:error]}"
+            project_data = simulate_jira_project(project_key)
+          end
           
           {
             project_key: project_key,
@@ -1844,6 +1857,378 @@ module CodeHealer
         status_transitions: { "Open": "In Progress", "In Progress": "Review", "Review": "Done" },
         priority_distribution: { "High": 20, "Medium": 60, "Low": 20 }
       }
+    end
+
+    # Real JIRA API integration methods
+    def self.jira_api_available?
+      # Check if JIRA configuration is available
+      ENV['JIRA_URL'] && ENV['JIRA_USERNAME'] && ENV['JIRA_API_TOKEN']
+    end
+
+    def self.jira_api_call(endpoint, method = :get, body = nil)
+      return { error: "JIRA configuration not available" } unless jira_api_available?
+      
+      begin
+        url = "#{ENV['JIRA_URL']}/rest/api/2#{endpoint}"
+        auth = { username: ENV['JIRA_USERNAME'], password: ENV['JIRA_API_TOKEN'] }
+        
+        options = {
+          basic_auth: auth,
+          headers: { 'Content-Type' => 'application/json' }
+        }
+        
+        case method
+        when :get
+          response = HTTParty.get(url, options)
+        when :post
+          response = HTTParty.post(url, options.merge(body: body.to_json))
+        when :put
+          response = HTTParty.put(url, options.merge(body: body.to_json))
+        else
+          return { error: "Unsupported HTTP method: #{method}" }
+        end
+        
+        if response.success?
+          JSON.parse(response.body)
+        else
+          { error: "JIRA API error: #{response.code} - #{response.body}" }
+        end
+      rescue => e
+        { error: "JIRA API call failed: #{e.message}" }
+      end
+    end
+
+    def self.get_real_jira_ticket(ticket_id)
+      endpoint = "/issue/#{ticket_id}"
+      response = jira_api_call(endpoint)
+      
+      return response if response['error']
+      
+      # Transform Jira API response to our format
+      {
+        id: response['key'],
+        summary: response['fields']['summary'],
+        description: response['fields']['description'],
+        status: response['fields']['status']['name'],
+        priority: response['fields']['priority']['name'],
+        assignee: response['fields']['assignee']&.dig('emailAddress'),
+        reporter: response['fields']['reporter']&.dig('emailAddress'),
+        created: response['fields']['created'],
+        updated: response['fields']['updated'],
+        issue_type: response['fields']['issuetype']['name'],
+        project: response['fields']['project']['key'],
+        components: response['fields']['components']&.map { |c| c['name'] } || [],
+        labels: response['fields']['labels'] || [],
+        comments: response['fields']['comment']&.dig('comments')&.map { |c| 
+          { author: c['author']['emailAddress'], body: c['body'], created: c['created'] }
+        } || [],
+        attachments: response['fields']['attachment']&.map { |a| a['filename'] } || [],
+        related_issues: [], # Jira doesn't provide this directly
+        time_tracking: {
+          original_estimate: response['fields']['timeoriginalestimate'],
+          time_spent: response['fields']['timespent'],
+          remaining_estimate: response['fields']['timeestimate']
+        }
+      }
+    end
+
+    def self.get_real_jira_search(query, project_key, issue_type, status, assignee)
+      jql_parts = []
+      jql_parts << "project = #{project_key}" if project_key
+      jql_parts << "issuetype = #{issue_type}" if issue_type
+      jql_parts << "status = #{status}" if status
+      jql_parts << "assignee = #{assignee}" if assignee
+      jql_parts << "text ~ \"#{query}\"" if query
+      
+      jql = jql_parts.join(" AND ")
+      endpoint = "/search?jql=#{CGI.escape(jql)}&maxResults=10"
+      
+      response = jira_api_call(endpoint)
+      return [] if response['error']
+      
+      response['issues']&.map do |issue|
+        {
+          id: issue['key'],
+          summary: issue['fields']['summary'],
+          status: issue['fields']['status']['name'],
+          priority: issue['fields']['priority']['name'],
+          assignee: issue['fields']['assignee']&.dig('emailAddress'),
+          issue_type: issue['fields']['issuetype']['name'],
+          created: issue['fields']['created'],
+          updated: issue['fields']['updated']
+        }
+      end || []
+    end
+
+    def self.get_real_jira_project(project_key)
+      endpoint = "/project/#{project_key}"
+      response = jira_api_call(endpoint)
+      
+      return response if response['error']
+      
+      {
+        key: response['key'],
+        name: response['name'],
+        description: response['description'],
+        lead: response['lead']['emailAddress'],
+        url: "#{ENV['JIRA_URL']}/browse/#{project_key}",
+        components: response['components']&.map { |c| c['name'] } || [],
+        issue_types: response['issueTypes']&.map { |it| it['name'] } || [],
+        statuses: response['statuses']&.map { |s| s['name'] } || [],
+        versions: response['versions']&.map { |v| v['name'] } || [],
+        permissions: response['permissions'] || []
+      }
+    end
+
+    # Fallback to simulation if real API fails
+    def self.simulate_jira_available?
+      # Check if JIRA configuration is available
+      ENV['JIRA_URL'] && ENV['JIRA_USERNAME'] && ENV['JIRA_API_TOKEN']
+    end
+  end
+
+  # Tool for Confluence integration and business context retrieval
+  class ConfluenceIntegrationTool < MCP::Tool
+    description "Integrates with Confluence to retrieve PRDs, business requirements, and documentation for business context"
+    input_schema(
+      properties: {
+        action: { type: "string", enum: ["search_documents", "get_document", "get_space_info", "search_prd"] },
+        search_query: { type: "string" },
+        space_key: { type: "string" },
+        document_id: { type: "string" },
+        server_context: { type: "object" }
+      },
+      required: ["action"]
+    )
+    annotations(
+      title: "Confluence Integration Tool",
+      read_only_hint: true,
+      destructive_hint: false,
+      idempotent_hint: true,
+      open_world_hint: false
+    )
+
+    def self.call(action:, search_query: nil, space_key: nil, document_id: nil, server_context:)
+      case action
+      when "search_documents"
+        search_confluence_documents(search_query, space_key)
+      when "get_document"
+        get_confluence_document(document_id)
+      when "get_space_info"
+        get_confluence_space_info(space_key)
+      when "search_prd"
+        search_prd_documents(search_query, space_key)
+      else
+        MCP::Tool::Response.new([{ type: "text", text: { error: "Unknown action: #{action}" }.to_json }])
+      end
+    end
+
+    private
+
+    def self.search_confluence_documents(query, space_key)
+      if confluence_api_available?
+        get_real_confluence_search(query, space_key)
+      else
+        simulate_confluence_search(query, space_key)
+      end
+    end
+
+    def self.get_confluence_document(document_id)
+      if confluence_api_available?
+        get_real_confluence_document(document_id)
+      else
+        simulate_confluence_document(document_id)
+      end
+    end
+
+    def self.get_confluence_space_info(space_key)
+      if confluence_api_available?
+        get_real_confluence_space_info(space_key)
+      else
+        simulate_confluence_space_info(space_key)
+      end
+    end
+
+    def self.search_prd_documents(query, space_key)
+      if confluence_api_available?
+        get_real_confluence_prd_search(query, space_key)
+      else
+        simulate_confluence_prd_search(query, space_key)
+      end
+    end
+
+    # Real Confluence API calls
+    def self.confluence_api_available?
+      ENV['CONFLUENCE_URL'] && ENV['CONFLUENCE_USERNAME'] && ENV['CONFLUENCE_API_TOKEN']
+    end
+
+    def self.confluence_api_call(endpoint, params = {})
+      return nil unless confluence_api_available?
+
+      url = "#{ENV['CONFLUENCE_URL']}/rest/api#{endpoint}"
+      auth = { username: ENV['CONFLUENCE_USERNAME'], password: ENV['CONFLUENCE_API_TOKEN'] }
+      
+      begin
+        response = HTTParty.get(url, basic_auth: auth, query: params)
+        response.success? ? response.parsed_response : nil
+      rescue => e
+        puts "⚠️  Confluence API call failed: #{e.message}"
+        nil
+      end
+    end
+
+    def self.get_real_confluence_search(query, space_key)
+      params = {
+        cql: "space = #{space_key} AND text ~ \"#{query}\"",
+        limit: 10,
+        expand: "content"
+      }
+      
+      data = confluence_api_call('/content/search', params)
+      return { error: "Failed to search Confluence" } unless data
+
+      documents = data['results']&.map do |result|
+        {
+          id: result['id'],
+          title: result['title'],
+          type: result['type'],
+          space_key: result['space']['key'],
+          url: "#{ENV['CONFLUENCE_URL']}/wiki#{result['_links']['webui']}",
+          content: result['excerpt'] || result['title'],
+          labels: result['metadata']&.dig('labels', 'results')&.map { |l| l['name'] } || []
+        }
+      end || []
+
+      MCP::Tool::Response.new([{ type: "text", text: { documents: documents }.to_json }])
+    end
+
+    def self.get_real_confluence_document(document_id)
+      data = confluence_api_call("/content/#{document_id}")
+      return { error: "Failed to get document" } unless data
+
+      document = {
+        id: data['id'],
+        title: data['title'],
+        type: data['type'],
+        space_key: data['space']['key'],
+        url: "#{ENV['CONFLUENCE_URL']}/wiki#{data['_links']['webui']}",
+        content: data['body']&.dig('storage', 'value') || data['title'],
+        labels: data['metadata']&.dig('labels', 'results')&.map { |l| l['name'] } || []
+      }
+
+      MCP::Tool::Response.new([{ type: "text", text: { document: document }.to_json }])
+    end
+
+    def self.get_real_confluence_space_info(space_key)
+      data = confluence_api_call("/space/#{space_key}")
+      return { error: "Failed to get space info" } unless data
+
+      space_info = {
+        key: data['key'],
+        name: data['name'],
+        type: data['type'],
+        description: data['description'],
+        url: "#{ENV['CONFLUENCE_URL']}/wiki/spaces/#{space_key}",
+        permissions: data['permissions'] || []
+      }
+
+      MCP::Tool::Response.new([{ type: "text", text: { space: space_info }.to_json }])
+    end
+
+    def self.get_real_confluence_prd_search(query, space_key)
+      params = {
+        cql: "space = #{space_key} AND (text ~ \"PRD\" OR text ~ \"Product Requirements\" OR text ~ \"#{query}\")",
+        limit: 5,
+        expand: "content"
+      }
+      
+      data = confluence_api_call('/content/search', params)
+      return { error: "Failed to search PRD documents" } unless data
+
+      prd_documents = data['results']&.map do |result|
+        {
+          id: result['id'],
+          title: result['title'],
+          type: result['type'],
+          space_key: result['space']['key'],
+          url: "#{ENV['CONFLUENCE_URL']}/wiki#{result['_links']['webui']}",
+          content: result['excerpt'] || result['title'],
+          is_prd: result['title'].include?('PRD') || result['title'].include?('Product Requirements'),
+          labels: result['metadata']&.dig('labels', 'results')&.map { |l| l['name'] } || []
+        }
+      end || []
+
+      MCP::Tool::Response.new([{ type: "text", text: { documents: prd_documents }.to_json }])
+    end
+
+    # Simulation methods for when Confluence API is not available
+    def self.simulate_confluence_search(query, space_key)
+      documents = [
+        {
+          id: "sim-1",
+          title: "Business Rules for #{space_key}",
+          type: "page",
+          space_key: space_key,
+          url: "https://confluence.example.com/wiki/spaces/#{space_key}/pages/sim-1",
+          content: "Simulated business rules document for #{space_key} project",
+          labels: ["business-rules", "requirements"]
+        },
+        {
+          id: "sim-2",
+          title: "Process Documentation",
+          type: "page",
+          space_key: space_key,
+          url: "https://confluence.example.com/wiki/spaces/#{space_key}/pages/sim-2",
+          content: "Simulated process documentation for #{space_key}",
+          labels: ["process", "workflow"]
+        }
+      ]
+
+      MCP::Tool::Response.new([{ type: "text", text: { documents: documents }.to_json }])
+    end
+
+    def self.simulate_confluence_document(document_id)
+      document = {
+        id: document_id,
+        title: "Simulated Confluence Document",
+        type: "page",
+        space_key: "DGTL",
+        url: "https://confluence.example.com/wiki/spaces/DGTL/pages/#{document_id}",
+        content: "This is a simulated Confluence document content for testing purposes.",
+        labels: ["simulated", "test"]
+      }
+
+      MCP::Tool::Response.new([{ type: "text", text: { document: document }.to_json }])
+    end
+
+    def self.simulate_confluence_space_info(space_key)
+      space_info = {
+        key: space_key,
+        name: "#{space_key} Project Space",
+        type: "global",
+        description: "Simulated Confluence space for #{space_key} project",
+        url: "https://confluence.example.com/wiki/spaces/#{space_key}",
+        permissions: ["view", "edit", "create"]
+      }
+
+      MCP::Tool::Response.new([{ type: "text", text: { space: space_info }.to_json }])
+    end
+
+    def self.simulate_confluence_prd_search(query, space_key)
+      prd_documents = [
+        {
+          id: "prd-1",
+          title: "Product Requirements Document - #{space_key}",
+          type: "page",
+          space_key: space_key,
+          url: "https://confluence.example.com/wiki/spaces/#{space_key}/pages/prd-1",
+          content: "Simulated PRD for #{space_key} project with requirements and business rules",
+          is_prd: true,
+          labels: ["PRD", "requirements", "product"]
+        }
+      ]
+
+      MCP::Tool::Response.new([{ type: "text", text: { documents: prd_documents }.to_json }])
     end
   end
 

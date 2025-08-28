@@ -27,7 +27,7 @@ module CodeHealer
           puts "Creating pull request for branch: #{branch_name}"
           
           # Get target branch from configuration
-          target_branch = ConfigManager.pr_target_branch || 'main'
+          target_branch = ConfigManager.pr_target_branch
           puts "📋 Target branch for PR: #{target_branch}"
           
           pr = client.create_pull_request(

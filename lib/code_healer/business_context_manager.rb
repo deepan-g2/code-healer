@@ -177,8 +177,44 @@ module CodeHealer
       end
       
     def build_claude_code_prompt(error, class_name, method_name, file_path)
-        # Load business context from markdown files
-        business_context = load_business_context_from_markdown_simple
+        # Get business context based on configured strategy
+        business_context = case CodeHealer::ConfigManager.business_context_strategy
+        when 'confluence_only'
+          "## Business Context Instructions:\n" \
+          "OPTIONAL: You can use Confluence MCP tools to enhance business context if available.\n\n" \
+          "1. If Confluence MCP is available:\n" \
+          "   - Search for PRDs/specs related to '#{class_name}' / '#{method_name}'.\n" \
+          "   - Query terms: '#{class_name}', '#{method_name}', 'business rules', 'validation patterns'.\n" \
+          "   - Apply any found documentation to your fix.\n\n" \
+          "2. If Confluence MCP is not available:\n" \
+          "   - Proceed with standard business logic and error handling practices.\n" \
+          "   - Use common validation patterns and best practices.\n\n" \
+          "Note: MCP usage is optional - proceed with or without it."
+        when 'claude_atlassian_mcp'
+          "## Business Context Instructions:\n" \
+          "OPTIONAL: You can use Atlassian MCP tools to enhance business context if available.\n\n" \
+          "1. **If Jira MCP is available:**\n" \
+          "   - Search for tickets related to '#{class_name}' or '#{method_name}'\n" \
+          "   - Look for bug reports, requirements, or business rules\n" \
+          "   - Apply any found ticket context to your fix\n\n" \
+          "2. **If Confluence MCP is available:**\n" \
+          "   - Search for PRDs, technical specs, or business process docs\n" \
+          "   - Look for domain-specific business rules related to '#{class_name}'\n" \
+          "   - Apply any found documentation to your fix\n\n" \
+          "3. **If MCP tools are not available:**\n" \
+          "   - Proceed with standard business logic and error handling practices\n" \
+          "   - Use common validation patterns and best practices\n\n" \
+          "Note: MCP usage is optional - proceed with or without it."
+        when 'jira_mcp'
+          # Use Jira MCP context
+          get_jira_business_context(class_name)
+        when 'markdown'
+          # Use markdown files
+          load_business_context_from_markdown_simple
+        else
+          # Default fallback
+          load_business_context_from_markdown_simple
+        end
         
         prompt = <<~PROMPT
           I have a Ruby on Rails application with an error that needs fixing.
@@ -195,7 +231,7 @@ module CodeHealer
           #{error.backtrace&.join("\n") || "No backtrace available"}
           ```
           
-          ## Business Context (from requirements):
+          ## Business Context:
           #{business_context}
           
           ## Instructions:
@@ -260,6 +296,24 @@ module CodeHealer
         PROMPT
         
         prompt.strip
+      end
+      
+      def get_jira_business_context(class_name)
+        # Get Jira business context using MCP tools
+        begin
+          # This would integrate with Jira MCP tools
+          # For now, return instructions to use Jira MCP
+          "## Jira Business Context Instructions:\n" \
+          "Use Jira MCP tools to fetch business context:\n" \
+          "1. Search for tickets related to '#{class_name}'\n" \
+          "2. Look for business requirements and rules\n" \
+          "3. Apply the context to your fix\n" \
+          "4. Reference specific Jira tickets in your explanation"
+        rescue => e
+          "## Jira Business Context:\n" \
+          "Unable to fetch Jira context: #{e.message}\n" \
+          "Please use Jira MCP tools manually to get business context."
+        end
       end
       
       private

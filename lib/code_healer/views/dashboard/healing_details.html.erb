@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Healing Details - CodeHealer Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      color: white;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .back-link {
+      color: white;
+      text-decoration: none;
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+
+    .back-link:hover {
+      opacity: 1;
+    }
+
+    .healing-card {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+    }
+
+    .card-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .info-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      border-left: 4px solid #667eea;
+    }
+
+    .info-section h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .info-item:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      font-weight: 500;
+      color: #666;
+    }
+
+    .info-value {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .status-badge {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .status-success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+
+    .status-failed {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+
+    .timing-chart {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+
+    .timing-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .timing-label {
+      width: 120px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .timing-progress {
+      flex: 1;
+      height: 20px;
+      background: #e9ecef;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 0 15px;
+    }
+
+    .timing-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      transition: width 0.3s ease;
+    }
+
+    .timing-value {
+      width: 80px;
+      text-align: right;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .error-details {
+      background: #fff5f5;
+      border: 1px solid #fed7d7;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .error-details h3 {
+      color: #c53030;
+      margin-bottom: 15px;
+    }
+
+    .code-block {
+      background: #2d3748;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .header h1 {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 Healing Details</h1>
+      <a href="/code_healer/dashboard" class="back-link">← Back to Dashboard</a>
+    </div>
+
+    <% if @healing %>
+      <div class="healing-card">
+        <div class="card-title">Healing Information</div>
+        
+        <div class="info-grid">
+          <div class="info-section">
+            <h3>Basic Details</h3>
+            <div class="info-item">
+              <span class="info-label">Healing ID:</span>
+              <span class="info-value"><%= @healing.healing_id %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Class:</span>
+              <span class="info-value"><%= @healing.class_name %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Method:</span>
+              <span class="info-value"><%= @healing.method_name %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Status:</span>
+              <span class="status-badge status-<%= @healing.healing_successful ? 'success' : 'failed' %>">
+                <%= @healing.healing_successful ? '✅ Success' : '❌ Failed' %>
+              </span>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>AI & Evolution</h3>
+            <div class="info-item">
+              <span class="info-label">Evolution Method:</span>
+              <span class="info-value"><%= @healing.evolution_method_display %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">AI Provider:</span>
+              <span class="info-value"><%= @healing.ai_provider_display %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">AI Success:</span>
+              <span class="info-value"><%= @healing.ai_success ? '✅ Yes' : '❌ No' %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Tests Passed:</span>
+              <span class="info-value"><%= @healing.tests_passed ? '✅ Yes' : '❌ No' %></span>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Timing & Performance</h3>
+            <div class="info-item">
+              <span class="info-label">Started:</span>
+              <span class="info-value"><%= @healing.healing_started_at&.strftime("%Y-%m-%d %H:%M:%S") || 'N/A' %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Completed:</span>
+              <span class="info-value"><%= @healing.healing_completed_at&.strftime("%Y-%m-%d %H:%M:%S") || 'N/A' %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Total Duration:</span>
+              <span class="info-value"><%= @healing.duration_seconds ? "#{@healing.duration_seconds}s" : 'N/A' %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Syntax Valid:</span>
+              <span class="info-value"><%= @healing.syntax_valid ? '✅ Yes' : '❌ No' %></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="timing-chart">
+          <h3>Processing Breakdown</h3>
+          <div class="timing-bar">
+            <span class="timing-label">AI Processing:</span>
+            <div class="timing-progress">
+              <div class="timing-fill" style="width: <%= @healing.ai_processing_seconds ? (@healing.ai_processing_seconds / @healing.duration_seconds.to_f * 100).round(1) : 0 %>%"></div>
+            </div>
+            <span class="timing-value"><%= @healing.ai_processing_seconds ? "#{@healing.ai_processing_seconds}s" : 'N/A' %></span>
+          </div>
+          <div class="timing-bar">
+            <span class="timing-label">Git Operations:</span>
+            <div class="timing-progress">
+              <div class="timing-fill" style="width: <%= @healing.git_operations_seconds ? (@healing.git_operations_seconds / @healing.duration_seconds.to_f * 100).round(1) : 0 %>%"></div>
+            </div>
+            <span class="timing-value"><%= @healing.git_operations_seconds ? "#{@healing.git_operations_seconds}s" : 'N/A' %></span>
+          </div>
+        </div>
+
+        <% if @healing.error_class.present? %>
+          <div class="error-details">
+            <h3>Error Information</h3>
+            <div class="info-item">
+              <span class="info-label">Error Class:</span>
+              <span class="info-value"><%= @healing.error_class %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Error Message:</span>
+              <span class="info-value"><%= @healing.error_message %></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">File Path:</span>
+              <span class="info-value"><%= @healing.file_path %></span>
+            </div>
+            <% if @healing.failure_reason.present? %>
+              <div class="info-item">
+                <span class="info-label">Failure Reason:</span>
+                <span class="info-value"><%= @healing.failure_reason %></span>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+
+        <% if @healing.healing_branch.present? %>
+          <div class="info-section">
+            <h3>Git Operations</h3>
+            <div class="info-item">
+              <span class="info-label">Healing Branch:</span>
+              <span class="info-value"><%= @healing.healing_branch %></span>
+            </div>
+            <% if @healing.pull_request_url.present? %>
+              <div class="info-item">
+                <span class="info-label">Pull Request:</span>
+                <span class="info-value">
+                  <a href="<%= @healing.pull_request_url %>" target="_blank" style="color: #667eea; text-decoration: none;">
+                    🔗 View PR
+                  </a>
+                </span>
+              </div>
+            <% end %>
+            <div class="info-item">
+              <span class="info-label">PR Created:</span>
+              <span class="info-value"><%= @healing.pr_created ? '✅ Yes' : '❌ No' %></span>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <div class="healing-card">
+        <div class="error-details">
+          <h3>Healing Not Found</h3>
+          <p>The requested healing operation could not be found.</p>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</body>
+</html>

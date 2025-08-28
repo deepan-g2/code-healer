@@ -82,6 +82,22 @@ module CodeHealer
         config['claude_code'] || {}
       end
 
+      def claude_persist_session?
+        claude_code_settings['persist_session'] == true
+      end
+
+      def claude_preload_paths
+        claude_code_settings['preload_paths'] || [
+          'app', 'lib', 'config', 'Gemfile', 'Gemfile.lock'
+        ]
+      end
+
+      def claude_ignore_paths
+        claude_code_settings['ignore'] || [
+          '.git', 'tmp', 'log', 'storage', 'node_modules', 'vendor', 'public', 'packs', '.bundle', 'bootsnap', 'cache'
+        ]
+      end
+
       # Business Context Configuration
       def business_context_enabled?
         config.dig('business_context', 'enabled') == true
@@ -91,9 +107,77 @@ module CodeHealer
         config['business_context'] || {}
       end
 
+      # Business Context Strategy Configuration
+      def business_context_strategy
+        business_context_settings['strategy'] || 'markdown'
+      end
+
+      def use_jira_mcp?
+        business_context_strategy == 'jira_mcp' || business_context_strategy == 'hybrid'
+      end
+
+      def use_markdown_context?
+        business_context_strategy == 'markdown' || business_context_strategy == 'hybrid'
+      end
+
+      def use_hybrid_context?
+        business_context_strategy == 'hybrid'
+      end
+
+      def jira_mcp_settings
+        business_context_settings['jira_mcp'] || {}
+      end
+
+      def markdown_settings
+        business_context_settings['markdown'] || {}
+      end
+
+      def hybrid_settings
+        business_context_settings['hybrid'] || {}
+      end
+
+      def jira_mcp_enabled?
+        use_jira_mcp? && jira_mcp_settings['enabled'] != false
+      end
+
+      def markdown_enabled?
+        use_markdown_context? && markdown_settings['enabled'] != false
+      end
+
+      def jira_mcp_system_prompt
+        jira_mcp_settings['system_prompt'] || default_jira_mcp_prompt
+      end
+
+      def default_jira_mcp_prompt
+        <<~PROMPT
+          When fixing code, ALWAYS check Jira MCP for business context:
+          1. Search for tickets about the class/method you're fixing
+          2. Use Jira requirements to ensure your fix follows business rules
+          3. Reference specific Jira tickets in your explanation
+          4. Make sure fixes align with business requirements
+        PROMPT
+      end
+
       # API Configuration
       def api_settings
         config['api'] || {}
+      end
+
+      # Demo Configuration
+      def demo_settings
+        config['demo'] || {}
+      end
+
+      def demo_mode?
+        demo_settings['enabled'] == true
+      end
+
+      def demo_skip_tests?
+        demo_mode? && demo_settings['skip_tests'] != false
+      end
+
+      def demo_skip_pr?
+        demo_mode? && demo_settings['skip_pr'] != false
       end
 
       def git_settings
@@ -107,6 +191,11 @@ module CodeHealer
       
       def code_heal_directory_path
         code_heal_directory_config['path'] || '/tmp/code_healer_workspaces'
+      end
+
+      def sticky_workspace?
+        cfg = code_heal_directory_config
+        cfg['sticky_workspace'] == true || cfg[:sticky_workspace] == true
       end
       
       def auto_cleanup_workspaces?
@@ -151,7 +240,8 @@ module CodeHealer
       end
 
       def pr_target_branch
-        git_settings['pr_target_branch'] || 'main'
+        # Check both git section and root level for backward compatibility
+        git_settings['pr_target_branch'] || config['pr_target_branch'] || 'main'
       end
 
       def commit_message_template
@@ -272,6 +362,11 @@ module CodeHealer
             'model' => 'gpt-4',
             'max_tokens' => 2000,
             'temperature' => 0.1
+          },
+          'demo' => {
+            'enabled' => false,
+            'skip_tests' => true,
+            'skip_pr' => true
           },
           'git' => {
             'auto_commit' => true,

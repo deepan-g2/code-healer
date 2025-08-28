@@ -8,12 +8,13 @@ require 'openai'
 require 'sidekiq'
 require 'git'
 require 'octokit'
+require 'open3'
 
 # CodeHealer - AI-Powered Code Healing and Self-Repair System
 module CodeHealer
   class Error < StandardError; end
   
-  # Your code goes here...
+
 end
 
 # Autoload all the main classes
@@ -29,10 +30,11 @@ autoload :McpTools, "code_healer/mcp_tools"
 autoload :McpPrompts, "code_healer/mcp_prompts"
 autoload :MCP, "code_healer/mcp"
 
-# Dashboard components
-autoload :HealingMetric, "code_healer/models/healing_metric"
-autoload :MetricsCollector, "code_healer/services/metrics_collector"
-autoload :DashboardController, "code_healer/controllers/dashboard_controller"
+# Dashboard components - load them explicitly to avoid autoload issues
+require_relative "code_healer/models/healing_metric"
+require_relative "code_healer/services/metrics_collector"
+require_relative "code_healer/controllers/dashboard_controller"
+require_relative "code_healer/claude_session"
 autoload :Installer, "code_healer/installer"
 
 # Rails integration
@@ -71,5 +73,23 @@ if defined?(Rails)
         puts "   Run 'code_healer-setup' to configure CodeHealer"
       end
     end
+    
+    # Mount the engine to provide dashboard routes and views
+    initializer "code_healer.mount_engine" do |app|
+      app.routes.prepend do
+        mount CodeHealer::Engine => "/code_healer"
+      end
+    end
+
+    # Preload Claude session and repository context once per boot
+    config.after_initialize do
+      begin
+        CodeHealer::ClaudeSession.start!
+      rescue => e
+        puts "⚠️ Claude preload failed: #{e.message}"
+      end
+    end
+    
+
   end
 end

@@ -252,11 +252,51 @@ github_token = ask_for_input("Enter your GitHub personal access token (or press 
 github_repo = ask_for_input("Enter your GitHub repository (username/repo or full URL):")
 github_repo_url = normalize_repository_url(github_repo, github_token)
 
+# Jira Configuration
+puts
+puts "🎫 Jira Configuration:"
+puts "Configure Jira integration for business context during healing operations."
+puts "Get your API token at: https://id.atlassian.com/manage-profile/security/api-tokens"
+puts
+
+enable_jira = ask_for_yes_no("Enable Jira integration for business context?", default: false)
+
+if enable_jira
+  jira_url = ask_for_input("Enter your Jira instance URL (e.g., https://your-company.atlassian.net):")
+  jira_username = ask_for_input("Enter your Jira username/email:")
+  jira_api_token = ask_for_input("Enter your Jira API token:")
+  jira_project_key = ask_for_input("Enter your default Jira project key (e.g., DGTL):")
+  
+  # Validate Jira configuration
+  puts "🔍 Validating Jira configuration..."
+  if jira_url && jira_username && jira_api_token && jira_project_key
+    puts "✅ Jira configuration provided"
+  else
+    puts "⚠️  Incomplete Jira configuration - integration will be disabled"
+    enable_jira = false
+  end
+else
+  jira_url = ""
+  jira_username = ""
+  jira_api_token = ""
+  jira_project_key = ""
+end
+
 # Git Branch Configuration
 puts
 puts "🌿 Git Branch Configuration:"
 branch_prefix = ask_for_input("Enter branch prefix for healing branches (default: evolve):", default: "evolve")
-pr_target_branch = ask_for_input("Enter target branch for pull requests (default: main):", default: "main")
+
+# Detect the actual default branch from git
+default_branch = "main"
+if system("git rev-parse --verify master >/dev/null 2>&1")
+  default_branch = "master"
+elsif system("git rev-parse --verify main >/dev/null 2>&1")
+  default_branch = "main"
+end
+
+puts "🔍 Detected default branch: #{default_branch}"
+pr_target_branch = ask_for_input("Enter target branch for pull requests (default: #{default_branch}):", default: default_branch)
 
 # Code Heal Directory Configuration
 puts
@@ -297,6 +337,60 @@ puts
 puts "💼 Business Context Setup:"
 create_business_context = ask_for_yes_no("Would you like to create a business context file?", default: true)
 
+# Business Context Strategy Configurationy
+puts
+puts "🔍 Business Context Strategy Configuration:"
+puts "Choose how CodeHealer should get business context:"
+puts "1. Jira MCP (Claude Terminal uses its own Jira MCP)"
+puts "2. Markdown files (docs/business_rules.md)"
+puts "3. Hybrid (both Jira MCP and Markdown)"
+puts
+
+business_context_strategy = ask_for_input("Enter business context strategy (1/2/3 or jira_mcp/markdown/hybrid):", default: "jira_mcp")
+business_context_strategy = case business_context_strategy.downcase
+                           when "1", "jira_mcp"
+                             "jira_mcp"
+                           when "2", "markdown"
+                             "markdown"
+                           when "3", "hybrid"
+                             "hybrid"
+                           else
+                             "jira_mcp"
+                           end
+
+# Configure Confluence if selected
+enable_confluence = false
+confluence_url = ""
+confluence_username = ""
+confluence_api_token = ""
+confluence_space_key = ""
+
+if business_context_source == "confluence" || business_context_source == "hybrid"
+  puts
+  puts "📚 Confluence Configuration:"
+  puts "Configure Confluence integration for PRDs and documentation."
+  puts "Get your API token at: https://id.atlassian.com/manage-profile/security/api-tokens"
+  puts
+  
+  enable_confluence = ask_for_yes_no("Enable Confluence integration for business context?", default: false)
+  
+  if enable_confluence
+    confluence_url = ask_for_input("Enter your Confluence instance URL (e.g., https://your-company.atlassian.net/wiki):")
+    confluence_username = ask_for_input("Enter your Confluence username/email:")
+    confluence_api_token = ask_for_input("Enter your Confluence API token:")
+    confluence_space_key = ask_for_input("Enter your Confluence space key (e.g., DGTL):")
+    
+    # Validate Confluence configuration
+    puts "🔍 Validating Confluence configuration..."
+    if confluence_url && confluence_username && confluence_api_token && confluence_space_key
+      puts "✅ Confluence configuration provided"
+    else
+      puts "⚠️  Incomplete Confluence configuration - integration will be disabled"
+      enable_confluence = false
+    end
+  end
+end
+
 # Evolution Strategy Configuration
 puts
 puts "🧠 Evolution Strategy Configuration:"
@@ -320,6 +414,35 @@ evolution_method = case evolution_method.downcase
 
 fallback_to_api = ask_for_yes_no("Fallback to API if Claude Code fails?", default: true)
 
+# Demo Mode Configuration
+puts
+puts "🎭 Demo Mode Configuration:"
+puts "Demo mode optimizes CodeHealer for fast demonstrations and presentations:"
+puts "- Skips test generation for faster response times"
+puts "- Skips pull request creation for immediate results"
+puts "- Uses optimized Claude prompts for quick fixes"
+puts
+
+enable_demo_mode = ask_for_yes_no("Enable demo mode for fast demonstrations?", default: false)
+
+demo_config = {}
+if enable_demo_mode
+  demo_config[:skip_tests] = ask_for_yes_no("Skip test generation in demo mode?", default: true)
+  demo_config[:skip_pr] = ask_for_yes_no("Skip pull request creation in demo mode?", default: true)
+  
+  puts
+  puts "🚀 Demo mode will significantly speed up healing operations!"
+  puts "   Perfect for conference talks and live demonstrations."
+  
+  # Add demo-specific instructions
+  puts
+  puts "📋 Demo Mode Features:"
+  puts "   - Timeout reduced to 60 seconds for quick responses"
+  puts "   - Sticky workspace enabled for faster context loading"
+  puts "   - Claude session persistence for better performance"
+  puts "   - Tests and PRs skipped for immediate results"
+end
+
 # Create configuration files
 puts
 puts "📝 Step 3: Creating Configuration Files"
@@ -327,17 +450,29 @@ puts
 
 # Create actual .env file (will be ignored by git)
   env_content = <<~ENV
-  # CodeHealer Configuration
+    # CodeHealer Configuration
     # OpenAI Configuration
-  OPENAI_API_KEY=#{openai_key}
+    OPENAI_API_KEY=#{openai_key}
     
     # GitHub Configuration
-  GITHUB_TOKEN=#{github_token}
-  GITHUB_REPOSITORY=#{github_repo}
-  
-  # Optional: Redis Configuration
-  REDIS_URL=redis://localhost:6379/0
-ENV
+    GITHUB_TOKEN=#{github_token}
+    GITHUB_REPOSITORY=#{github_repo}
+    
+    # Jira Configuration
+    JIRA_URL=#{jira_url}
+    JIRA_USERNAME=#{jira_username}
+    JIRA_API_TOKEN=#{jira_api_token}
+    JIRA_PROJECT_KEY=#{jira_project_key}
+    
+    # Confluence Configuration
+    CONFLUENCE_URL=#{confluence_url}
+    CONFLUENCE_USERNAME=#{confluence_username}
+    CONFLUENCE_API_TOKEN=#{confluence_api_token}
+    CONFLUENCE_SPACE_KEY=#{confluence_space_key}
+    
+    # Optional: Redis Configuration
+    REDIS_URL=redis://localhost:6379/0
+  ENV
 
 create_file_with_content('.env', env_content, dry_run: options[:dry_run])
 
@@ -346,57 +481,92 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
     # CodeHealer Configuration
     enabled: true
     
-  # Allowed classes for healing (customize as needed)
+    # Allowed classes for healing (customize as needed)
     allowed_classes:
       - User
       - Order
       - PaymentProcessor
-    - OrderProcessor
+      - OrderProcessor
     
-  # Excluded classes (never touch these)
+    # Excluded classes (never touch these)
     excluded_classes:
       - ApplicationController
       - ApplicationRecord
       - ApplicationJob
       - ApplicationMailer
-    - ApplicationHelper
+      - ApplicationHelper
     
     # Allowed error types for healing
     allowed_error_types:
-    - ZeroDivisionError
-    - NoMethodError
+      - ZeroDivisionError
+      - NoMethodError
       - ArgumentError
-    - TypeError
+      - TypeError
       - NameError
       - ValidationError
     
-  # Evolution Strategy Configuration
+    # Evolution Strategy Configuration
     evolution_strategy:
-    method: #{evolution_method}  # Options: api, claude_code_terminal, hybrid
-    fallback_to_api: #{fallback_to_api}  # If Claude Code fails, fall back to API
+      method: #{evolution_method}  # Options: api, claude_code_terminal, hybrid
+      fallback_to_api: #{fallback_to_api}  # If Claude Code fails, fall back to API
     
-  # Claude Code Terminal Configuration
+    # Claude Code Terminal Configuration
     claude_code:
-    enabled: #{evolution_method == 'claude_code_terminal' || evolution_method == 'hybrid'}
-    timeout: 300  # Timeout in seconds
+      enabled: #{evolution_method == 'claude_code_terminal' || evolution_method == 'hybrid'}
+      timeout: #{enable_demo_mode ? 60 : 300}  # Shorter timeout for demo mode
       max_file_changes: 10
-      include_tests: true
-    command_template: "claude --print '{prompt}' --output-format text --permission-mode acceptEdits --allowedTools Edit"
+      include_tests: #{!enable_demo_mode || !demo_config[:skip_tests]}
+      persist_session: true  # Keep Claude session alive for faster responses
+      ignore:
+        - "tmp/"
+        - "log/"
+        - ".git/"
+        - "node_modules/"
+        - "vendor/"
+      command_template: "claude --print '{prompt}' --output-format text --permission-mode acceptEdits --allowedTools Edit"
       business_context_sources:
         - "config/business_rules.yml"
         - "docs/business_logic.md"
         - "spec/business_context_specs.rb"
     
-  # Business Context Configuration
+    # Business Context Configuration
     business_context:
       enabled: true
-    sources:
-      - "docs/business_rules.md"
+      strategy: "#{business_context_strategy}"
+      
+      # Jira MCP Configuration
+      jira_mcp:
+        enabled: #{business_context_strategy == 'jira_mcp' || business_context_strategy == 'hybrid'}
+        project_key: "#{jira_project_key}"
+        search_tickets_on_error: true
+        include_business_rules: true
+        system_prompt: |
+          When fixing code, ALWAYS check Jira MCP for business context:
+          1. Search for tickets about the class/method you're fixing
+          2. Use Jira requirements to ensure your fix follows business rules
+          3. Reference specific Jira tickets in your explanation
+          4. Make sure fixes align with business requirements
+      
+      # Markdown Configuration
+      markdown:
+        enabled: #{business_context_strategy == 'markdown' || business_context_strategy == 'hybrid'}
+        search_paths:
+          - "docs/business_rules.md"
+          - "docs/requirements.md"
+          - "business_requirements/"
+        include_patterns:
+          - "*.md"
+          - "*.txt"
+      
+      # Hybrid Configuration
+      hybrid:
+        priority: ["jira_mcp", "markdown"]
+        combine_results: true
     
     # OpenAI API configuration
     api:
       provider: openai
-    model: gpt-4
+      model: gpt-4
       max_tokens: 2000
       temperature: 0.1
     
@@ -404,46 +574,65 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
     git:
       auto_commit: true
       auto_push: true
-    branch_prefix: "#{branch_prefix}"
-    commit_message_template: 'Fix {{class_name}}\#\#{{method_name}}: {{error_type}}'
+      branch_prefix: "#{branch_prefix}"
+      commit_message_template: 'Fix {{class_name}}\#\#{{method_name}}: {{error_type}}'
+    
+    # Pull Request target branch (for backward compatibility)
     pr_target_branch: "#{pr_target_branch}"
-  
-  # Pull Request Configuration
+    
+    # Pull Request Configuration
     pull_request:
       enabled: true
       auto_create: true
       labels:
         - "auto-fix"
-      - "self-evolving"
+    
+    # Jira Integration Configuration
+    jira:
+      enabled: #{enable_jira}
+      url: "#{jira_url}"
+      username: "#{jira_username}"
+      project_key: "#{jira_project_key}"
+      business_context_enabled: #{enable_jira}
+      search_tickets_on_error: true
+      include_ticket_details: true
+        - "self-evolving"
         - "bug-fix"
     
-  # Safety Configuration
-  safety:
-    backup_before_evolution: true
-    rollback_on_syntax_error: true
-  
-  # Evolution Limits
-  max_evolutions_per_day: 10
-  
-  # Notification Configuration (optional)
-  notifications:
-    enabled: false
-    slack_webhook: ""
-    email_notifications: false
-  
-  # Performance Configuration
-  performance:
-    max_concurrent_healing: 3
-    healing_timeout: 300
-    retry_attempts: 3
-  
-  # Code Heal Directory Configuration
-  code_heal_directory:
-    path: "#{code_heal_directory}"
-    auto_cleanup: #{auto_cleanup}
-    cleanup_after_hours: #{cleanup_after_hours}
-    max_workspaces: 10
-    clone_strategy: "branch"  # Options: branch, full_repo
+    # Safety Configuration
+    safety:
+      backup_before_evolution: true
+      rollback_on_syntax_error: true
+    
+    # Evolution Limits
+    max_evolutions_per_day: 10
+    
+    # Notification Configuration (optional)
+    notifications:
+      enabled: false
+      slack_webhook: ""
+      email_notifications: false
+    
+    # Demo Mode Configuration
+    demo:
+      enabled: #{enable_demo_mode}
+      skip_tests: #{demo_config[:skip_tests] || false}
+      skip_pr: #{demo_config[:skip_pr] || false}
+    
+    # Performance Configuration
+    performance:
+      max_concurrent_healing: 3
+      healing_timeout: 300
+      retry_attempts: 3
+    
+    # Code Heal Directory Configuration
+    code_heal_directory:
+      path: "#{code_heal_directory}"
+      auto_cleanup: #{auto_cleanup}
+      cleanup_after_hours: #{cleanup_after_hours}
+      max_workspaces: 10
+      clone_strategy: "branch"  # Options: branch, full_repo
+      sticky_workspace: #{enable_demo_mode}  # Reuse workspace for faster demo responses
 YAML
 
 create_file_with_content('config/code_healer.yml', config_content, dry_run: options[:dry_run])
@@ -519,10 +708,13 @@ puts "   - .env file contains your actual API keys and is ignored by git"
 puts "   - .env.example is safe to commit and shows the required format"
 puts "   - Never commit .env files with real secrets to version control"
 puts
-puts "🏥 Code Heal Directory:"
-puts "   - Your code will be cloned to: #{code_heal_directory}"
-puts "   - This ensures safe, isolated healing without affecting your running server"
-puts "   - Workspaces are automatically cleaned up after #{cleanup_after_hours} hours"
+  puts "🏥 Code Heal Directory:"
+  puts "   - Your code will be cloned to: #{code_heal_directory}"
+  puts "   - This ensures safe, isolated healing without affecting your running server"
+  puts "   - Workspaces are automatically cleaned up after #{cleanup_after_hours} hours"
+  if enable_demo_mode
+    puts "   - Demo mode: Sticky workspace enabled for faster context loading"
+  end
 puts
 puts "⚙️  Configuration:"
 puts "   - code_healer.yml contains comprehensive settings with sensible defaults"
@@ -532,9 +724,18 @@ puts "   - All features are pre-configured and ready to use"
   puts "🌍 Environment Variables:"
   puts "   - Add 'gem \"dotenv-rails\"' to your Gemfile for automatic .env loading"
   puts "   - Or export variables manually: export GITHUB_TOKEN=your_token"
+  if enable_jira
+    puts "   - Jira integration: export JIRA_URL=#{jira_url}"
+    puts "   - Jira credentials: export JIRA_USERNAME=#{jira_username}"
+    puts "   - Jira project: export JIRA_PROJECT_KEY=#{jira_project_key}"
+  end
   puts "   - Or load .env file in your application.rb: load '.env' if File.exist?('.env')"
   puts
   puts "CodeHealer will now automatically detect and heal errors in your application!"
+  puts
+  puts "📊 Dashboard:"
+  puts "   - Access your healing metrics at: /code_healer/dashboard"
+  puts "   - API endpoints available at: /code_healer/api/dashboard/*"
 end
 
 puts

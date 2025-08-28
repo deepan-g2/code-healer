@@ -9,7 +9,7 @@ module CodeHealer
         error_class: error_class,
         error_message: error_message,
         file_path: file_path,
-        healing_started_at: Time.current
+        healing_started_at: Time.zone.now
       )
       
       metric.save!
@@ -66,13 +66,13 @@ module CodeHealer
       
       # Calculate timing
       total_duration = if metric.healing_started_at
-        ((Time.current - metric.healing_started_at) * 1000).round
+        ((Time.zone.now - metric.healing_started_at) * 1000).round
       else
         nil
       end
       
       metric.update!(
-        healing_completed_at: Time.current,
+        healing_completed_at: Time.zone.now,
         total_duration_ms: total_duration,
         healing_successful: success,
         tests_passed: tests_passed,
@@ -106,7 +106,7 @@ module CodeHealer
       metric = HealingMetric.find_by(healing_id: healing_id)
       return unless metric
       
-      metric.update!(error_occurred_at: error_occurred_at)
+      metric.update!(error_occurred_at: error_occurred_at.in_time_zone(Time.zone))
     end
     
     # Generate unique healing ID

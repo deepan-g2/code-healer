@@ -106,16 +106,19 @@ module CodeHealer
             syntax_check = system("ruby -c #{find_ruby_files.join(' ')} 2>/dev/null")
             return false unless syntax_check
             
-            # Run tests if available
-            if File.exist?('Gemfile')
-              bundle_check = system("bundle check >/dev/null 2>&1")
-              return false unless bundle_check
-              
-              # Run tests if RSpec is available
-              if File.exist?('spec') || File.exist?('test')
-                test_result = system("bundle exec rspec --dry-run >/dev/null 2>&1") ||
-                             system("bundle exec rake test:prepare >/dev/null 2>&1")
-                puts "🧪 Test preparation: #{test_result ? '✅' : '⚠️'}"
+            # Optionally skip heavy tests in demo mode
+            unless CodeHealer::ConfigManager.demo_skip_tests?
+              # Run tests if available
+              if File.exist?('Gemfile')
+                bundle_check = system("bundle check >/dev/null 2>&1")
+                return false unless bundle_check
+                
+                # Run tests if RSpec is available
+                if File.exist?('spec') || File.exist?('test')
+                  test_result = system("bundle exec rspec --dry-run >/dev/null 2>&1") ||
+                               system("bundle exec rake test:prepare >/dev/null 2>&1")
+                  puts "🧪 Test preparation: #{test_result ? '✅' : '⚠️'}"
+                end
               end
             end
             
@@ -170,7 +173,7 @@ module CodeHealer
               puts "📝 All changes committed in isolated workspace"
               
                           # Create pull request if auto-create is enabled and no PR was already created
-            if should_create_pull_request?
+            if should_create_pull_request? && !CodeHealer::ConfigManager.demo_skip_pr?
               puts "🔍 [WORKSPACE] Checking if PR was already created by evolution handler..."
               # Skip PR creation if we're in a healing workflow (PR likely already created)
               puts "🔍 [WORKSPACE] PR creation skipped - likely already created by evolution handler"

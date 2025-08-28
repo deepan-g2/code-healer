@@ -1,5 +1,5 @@
 module CodeHealer
-  class HealingMetric < ApplicationRecord
+  class HealingMetric < ActiveRecord::Base
     self.table_name = 'healing_metrics'
     
     # Validations
@@ -60,18 +60,42 @@ module CodeHealer
       end
       
       def daily_healing_trend(days = 30)
-        where('created_at >= ?', days.days.ago)
-          .group("DATE(created_at)")
-          .order("DATE(created_at)")
-          .count
+        # Timezone-aware daily buckets using application time zone
+        start_date = days.days.ago.to_date
+        end_date = Time.zone.today
+
+        trend_data = {}
+        (start_date..end_date).each do |date|
+          day_start = Time.zone.parse(date.to_s).beginning_of_day
+          day_end   = day_start.end_of_day
+          count = where(created_at: day_start..day_end).count
+          trend_data[date.strftime('%Y-%m-%d')] = count
+        end
+        trend_data
       end
       
       def hourly_healing_distribution
-        group("EXTRACT(HOUR FROM created_at)").order("EXTRACT(HOUR FROM created_at)").count
+        # Use Rails to group by hour without raw SQL
+        distribution = {}
+        (0..23).each do |hour|
+          start_time = Time.current.beginning_of_day + hour.hours
+          end_time = start_time + 1.hour
+          count = where(created_at: start_time..end_time).count
+          distribution[hour.to_s.rjust(2, '0')] = count
+        end
+        distribution
       end
     end
     
     # Instance methods
+    def processing?
+      healing_completed_at.nil?
+    end
+
+    def display_status
+      return 'processing' if processing?
+      healing_successful ? 'success' : 'failed'
+    end
     def duration_seconds
       return nil unless total_duration_ms
       (total_duration_ms / 1000.0).round(2)
@@ -88,6 +112,7 @@ module CodeHealer
     end
     
     def success_status
+      return '⏳ Processing' if processing?
       healing_successful ? '✅ Success' : '❌ Failed'
     end
     

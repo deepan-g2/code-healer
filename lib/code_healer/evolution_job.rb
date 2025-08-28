@@ -25,7 +25,7 @@ class EvolutionJob
           healing_branch = CodeHealer::HealingWorkspaceManager.create_healing_branch(
             Rails.root.to_s, 
             workspace_path, 
-            CodeHealer::ConfigManager.git_settings['pr_target_branch'] || 'main'
+            CodeHealer::ConfigManager.pr_target_branch
           )
           
           if healing_branch

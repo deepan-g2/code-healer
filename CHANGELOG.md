@@ -5,162 +5,187 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.13] - 2025-01-14
+## [0.1.20] - 2025-08-27
 
 ### Added
-- **Automatic Dashboard Installation** - Dashboard now installs automatically via Rails engine
-- **Rails Generator** - `rails g code_healer:install` command for easy setup
-- **Automatic Routes** - Dashboard routes are automatically mounted
-- **Migration Integration** - Database migrations are automatically included
+- **Confluence MCP Integration**: Added direct Confluence MCP tools for business context fetching (optional usage)
+- **Flexible MCP Usage**: Enhanced prompts to optionally use Confluence MCP tools when available
+- **Non-interactive MCP**: Fixed Claude Terminal flags to avoid manual approval prompts
+- **Business Context Strategy**: Added `confluence_only` strategy for focused Confluence documentation usage
 
 ### Fixed
-- **Duplicate PR creation** - Prevents duplicate pull requests when evolution handler already creates one
-- **PR workflow optimization** - Skips redundant PR creation in healing workspace manager
-
-## [0.1.11] - 2025-01-14
-
-### Fixed
-- **Repository cloning** - Now clones from GitHub remote URL instead of local path
-- **Git remote configuration** - Ensures workspace has correct GitHub remote for PR creation
-- **Debug information** - Added Git remote and branch debugging in workspace operations
-
-## [0.1.10] - 2025-01-14
+- **MCP Tool Access**: Removed restrictive tool flags that blocked MCP tool usage
+- **Debug Logging**: Cleaned up unnecessary MCP debugging logs from initialization and job startup
+- **Command Optimization**: Fixed Claude Terminal command flags for proper MCP integration
 
 ### Changed
-- **Complete workspace isolation** - All Git operations now happen in isolated workspace only
-- **No file copying** - Removed file copying between workspace and main repo
-- **Direct PR creation** - Pull requests are created directly from the isolated workspace
-- **Main repo protection** - Main repository is never touched, only the isolated workspace
+- **Prompt Strategy**: Updated business context prompts to optionally use MCP tools when available
+- **Initialization**: Streamlined gem startup without MCP availability checks
+- **Dependencies**: Maintained `httparty` for MCP API integration while removing debug overhead
+
+## [0.1.19] - 2025-08-21
 
 ### Fixed
-- **Git commit workflow** - Added proper change detection before committing
-- **Empty branch prevention** - Delete healing branches when no changes are detected
-- **Enhanced debugging** - Added Git status and diff logging throughout the process
-
-## [0.1.8] - 2025-01-14
+- **Critical Git Operations Duplication**: Fixed duplicate Git operations between evolution handler and workspace manager.
+- **Branch Detection**: Fixed automatic detection of repository's default branch (master vs main).
+- **Configuration Loading**: Fixed pr_target_branch configuration loading from both git section and root level.
+- **Workspace Isolation**: Improved Git operations to occur only in isolated workspace, preventing conflicts.
 
 ### Changed
-- **Production safety** - Healing workspace no longer modifies main directory directly
-- **Git workflow** - Changes are applied to isolated healing branches only
-- **Pull request automation** - Automatic PR creation when configured
-- **Method renaming** - `merge_fixes_back` → `create_healing_branch` for clarity
+- **Evolution Handler**: Removed duplicate Git operations to prevent conflicts with workspace manager.
+- **Setup Script**: Enhanced with automatic branch detection and better configuration structure.
+
+## [0.1.18] - 2025-08-21
 
 ### Fixed
-- **Git operations in isolated healing workspace** - Preserved .git directory during cloning for proper Git operations
-- **Branch creation and commit operations** now work correctly in the isolated workspace
-- **Workspace cleanup** properly removes .git directory to prevent conflicts
+- **Critical YAML Generation Bug**: Fixed incorrect indentation in setup script that caused YAML parsing errors.
+- **Configuration File Structure**: Corrected all YAML indentation issues in generated configuration files.
 
-## [0.1.6] - 2025-01-14
-
-### Added
-- **Code heal directory permission validation** during interactive setup
-- **Repository access testing** to ensure the directory can clone and push to the target repo
-- **Write permission verification** for the code heal directory
-- **Automatic directory creation** if it doesn't exist
-- **Comprehensive error messages** with troubleshooting tips for permission issues
-
-### Fixed
-- **Duplicate HealingJob class definition** that was preventing isolated healing workspace system from working
-- **Class loading conflict** between old and new healing logic
-- **Isolated healing workspace system** now properly activated
-
-## [0.1.4] - 2025-01-14
+## [0.1.17] - 2025-08-21
 
 ### Added
-- **Comprehensive logging** for isolated healing workspace system
-- **Detailed workspace creation logs** showing each step of the process
-- **Clone operation logging** with success/failure status
-- **Fix application logging** in isolated environment
-- **Workspace cleanup logging** for debugging
-
-### Fixed
-- **Workspace configuration reading** to handle both string and symbol keys
-- **Branch name sanitization** to prevent invalid Git branch names
-
-## [0.1.3] - 2025-01-14
-
-### Added
-- **Future Plans & Roadmap section** to README
-- Jira integration plans for business context automation
-- Confluence docs integration for domain knowledge extraction
-- PRD parsing capabilities for feature specifications
-- Git commit message analysis for business context learning
-- Slack/Teams integration for business discussions capture
-- Intelligent context discovery from existing code patterns
-
-## [0.1.2] - 2025-01-14
+- **Interactive Demo Mode Setup**: Added comprehensive demo mode configuration options to the interactive setup script.
+- **Demo Mode Features**: Timeout reduction (60s), sticky workspace, Claude session persistence, and conditional test/PR skipping.
+- **Setup Script Enhancements**: Better user guidance for demo mode configuration and performance optimization.
 
 ### Changed
-- **Final README improvements and personalization**
-- Updated contact email to deepan.ppgit@gmail.com
-- Added LinkedIn profile link for professional networking
-- Enhanced acknowledgments to include Claude AI
-- Personalized team references to Deepan Kumar
-- Added personal signature with LinkedIn link
+- **Setup Script**: Enhanced with demo mode questions and configuration generation.
+- **Configuration Generation**: Automatically generates optimized settings for conference demonstrations.
 
-## [0.1.1] - 2025-01-14
-
-### Changed
-- **Significantly improved README documentation**
-- Enhanced setup instructions with interactive bash script guidance
-- Added comprehensive configuration explanations for all 50+ options
-- Included detailed markdown file creation guide for business context
-- Added best practices and troubleshooting sections
-- Improved installation and configuration examples
-- Enhanced advanced configuration strategies documentation
-
-### Fixed
-- Updated repository URLs in gemspec to point to correct GitHub repo
-- Fixed executable path configuration in gemspec
-
-## [Unreleased]
+## [0.1.16] - 2025-08-21
 
 ### Added
-- Initial gem release
-- AI-powered error analysis and code generation
-- Multiple healing strategies (API, Claude Code, Hybrid)
-- Business context awareness and integration
-- Automated Git operations and PR creation
-- Background job processing with Sidekiq
-- Comprehensive YAML configuration
-- Business requirements integration from markdown files
-- Rails integration via Railtie
+- Processing state: dashboard shows in-flight healings as "processing" (no longer treated as failed)
+- API metrics payload now includes `status` and timezone-aware `created_at`
 
 ### Changed
-- Converted from standalone Rails application to gem
-- Refactored for modular architecture
-- Improved error handling and logging
-- Renamed from CodeHealer to CodeHealer
-
-### Deprecated
-- None
-
-### Removed
-- None
+- API endpoints default to JSON (`/code_healer/api/...`) to avoid template lookup
+- Compact metrics JSON for dashboard list rendering
 
 ### Fixed
-- Business context loading from markdown files
-- Template placeholder substitution in PR creation
-- Sidekiq job serialization issues
+- Timezone correctness: all metrics timestamps use `Time.zone`
+- Daily trend counts computed with timezone-aware day buckets
 
-### Security
-- Class restriction system for security
-- Environment variable support for sensitive data
-- Business rule validation
+## [0.1.15] - 2025-08-21
 
-## [0.1.0] - 2025-01-13
+### Fixed
+- **Dashboard Template Loading**: Fixed template loading issues by explicitly specifying view paths
+- **Engine Views Configuration**: Properly configured engine views path to resolve template missing errors
+- **Controller Template Rendering**: Updated render calls to use explicit template paths
+
+### Changed
+- **Template Rendering**: Changed from implicit template rendering to explicit template path specification
+- **View Path Configuration**: Enhanced engine configuration for proper view loading
+
+## [0.1.14] - 2025-08-21
 
 ### Added
-- Initial release of CodeHealer gem
-- Core healing engine
-- OpenAI API integration
-- Claude Code terminal integration
-- Business context management
-- Git operations automation
-- Sidekiq background processing
-- Comprehensive documentation
-- Example configurations
-- Test suite setup
+- **Dashboard UI Improvements**: Enhanced dashboard with proper HTML layout and styling
+- **Charts and Visualizations**: Added Chart.js integration for data visualization
+- **Detailed Views**: Enhanced healing details and performance metrics views
+- **Responsive Design**: Mobile-friendly dashboard interface
+
+### Fixed
+- **SQL Compatibility**: Replaced raw SQL with Rails-native methods for better database compatibility
+- **Dashboard Controller**: Fixed controller loading and routing issues
+- **Engine Integration**: Simplified engine structure to avoid conflicts
+
+### Changed
+- **Metrics Collection**: Improved performance of dashboard metrics queries
+- **UI Rendering**: Replaced plain text dashboard with proper HTML views
+
+## [0.1.13] - 2025-08-21
+
+### Added
+- **Automatic Dashboard Integration**: Rails Engine automatically mounts dashboard routes
+- **Database Migrations**: Automatic migration copying and execution
+- **Dashboard Components**: Complete dashboard system with metrics, trends, and performance views
+- **API Endpoints**: JSON API for dashboard data integration
+
+### Fixed
+- **Git Operations**: All Git operations now occur within isolated healing workspaces
+- **PR Creation**: Fixed duplicate PR creation and repository targeting issues
+- **Workspace Management**: Improved isolated healing environment with proper cleanup
+
+### Changed
+- **Healing Workflow**: Complete isolation of healing operations from main repository
+- **Dashboard Installation**: Fully automatic dashboard setup via Rails Engine
+
+## [0.1.12] - 2025-08-20
+
+### Fixed
+- **Duplicate PR Creation**: Prevented duplicate PR creation when evolution handler already creates PRs
+- **Workspace Cleanup**: Improved cleanup of healing workspaces
+
+## [0.1.11] - 2025-08-20
+
+### Fixed
+- **Repository Cloning**: Fixed incorrect repository cloning by using GitHub remote URL instead of local path
+- **Git Remote**: Ensured workspace has correct remote origin for proper Git operations
+
+## [0.1.10] - 2025-08-20
+
+### Changed
+- **Git Operations**: All Git operations (branching, committing, pushing, PR creation) now occur strictly within isolated workspace
+- **File Operations**: Removed direct file copying to main repository for complete isolation
+
+## [0.1.9] - 2025-08-20
+
+### Fixed
+- **Git Commit Issues**: Added proper change detection before committing in isolated workspace
+- **File Comparison**: Enhanced file comparison logic to only copy changed files
+
+## [0.1.8] - 2025-08-20
+
+### Fixed
+- **Workspace Cleanup**: Improved cleanup process to prevent Git conflicts
+
+## [0.1.7] - 2025-08-20
+
+### Fixed
+- **Git Working Tree**: Preserved .git directory during cloning and only removed during cleanup
+
+## [0.1.6] - 2025-08-20
+
+### Fixed
+- **Branch Name Sanitization**: Improved branch name handling for Git operations
+
+## [0.1.5] - 2025-08-20
+
+### Fixed
+- **Duplicate Class Definition**: Removed duplicate HealingJob class definition causing Sidekiq errors
+
+## [0.1.4] - 2025-08-20
+
+### Fixed
+- **Workspace Logging**: Added comprehensive logging to isolated healing workspace system
+
+## [0.1.3] - 2025-08-20
+
+### Fixed
+- **Configuration Keys**: Updated HealingWorkspaceManager to handle both string and symbol keys
+
+## [0.1.2] - 2025-08-20
+
+### Fixed
+- **Git Operations**: Fixed Git operations in isolated healing workspaces
+
+## [0.1.1] - 2025-08-20
+
+### Fixed
+- **Production Safety**: Enhanced production safety with isolated healing workspaces
+- **Git Integration**: Improved Git integration within isolated environments
+
+## [0.1.0] - 2025-08-20
+
+### Added
+- **AI-Powered Code Healing**: Automatic code error detection and repair
+- **Multiple AI Providers**: Support for OpenAI API and Claude Code Terminal
+- **Business Context Integration**: MCP-powered intelligent healing with business rules
+- **Git Integration**: Automatic branch creation, commits, and pull requests
+- **Isolated Healing**: Safe code modification in isolated workspaces
+- **Dashboard System**: Metrics collection and visualization
+- **Rails Integration**: Automatic Rails application integration via Railtie
 
 ---
 

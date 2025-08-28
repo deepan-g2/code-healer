@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+
+# Start Claude Terminal with code_healer_session for MCP tools access
+# This session will be used by CodeHealer for healing jobs
+
+puts "🚀 Starting Claude Terminal with code_healer_session for MCP tools..."
+puts "This session will be used by CodeHealer for healing jobs with Jira/Confluence access"
+puts ""
+puts "Session name: code_healer_session"
+puts "MCP tools: Jira, Confluence, and other Atlassian integrations"
+puts ""
+puts "Keep this terminal open while running healing jobs!"
+puts "=" * 60
+
+# Start Claude Terminal with the session
+exec "claude --session code_healer_session"

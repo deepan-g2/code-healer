@@ -1,11 +1,14 @@
 module CodeHealer
-  class DashboardController < ApplicationController
+  class DashboardController < ActionController::Base
+    # Set the view path to look in the engine's views directory
+    self.view_paths = ["#{CodeHealer::Engine.root}/lib/code_healer/views"]
+    
     def index
       @summary = MetricsCollector.dashboard_summary
       @recent_healings = HealingMetric.order(created_at: :desc).limit(10)
       
       respond_to do |format|
-        format.html { render_dashboard }
+        format.html { render template: "dashboard/index" }
         format.json { render json: @summary }
       end
     end
@@ -18,32 +21,73 @@ module CodeHealer
       @metrics = @metrics.by_evolution_method(params[:evolution_method]) if params[:evolution_method].present?
       @metrics = @metrics.by_ai_provider(params[:ai_provider]) if params[:ai_provider].present?
       @metrics = @metrics.recent(params[:days].to_i) if params[:days].present?
+      @metrics = @metrics.limit(params[:limit].to_i) if params[:limit].present?
       
+      # Render compact JSON suitable for dashboard list
+      payload = @metrics.map do |m|
+        {
+          healing_id: m.healing_id,
+          class_name: m.class_name,
+          method_name: m.method_name,
+          error_class: m.error_class,
+          error_message: m.error_message,
+          healing_successful: m.healing_successful,
+          status: m.display_status,
+          created_at: m.created_at.in_time_zone(Time.zone),
+          healing_branch: m.healing_branch,
+          pull_request_url: m.pull_request_url
+        }
+      end
+
       respond_to do |format|
-        format.html { render :metrics }
-        format.json { render json: @metrics }
+        format.json { render json: payload }
+        format.any  { render json: payload }
       end
     end
     
     def healing_details
       @healing = HealingMetric.find_by(healing_id: params[:healing_id])
       
-      if @healing
-        render json: {
-          healing: @healing,
-          timing: {
-            total_duration: @healing.duration_seconds,
-            ai_processing: @healing.ai_processing_seconds,
-            git_operations: @healing.git_operations_seconds
-          },
-          status: {
-            success: @healing.success_status,
-            evolution_method: @healing.evolution_method_display,
-            ai_provider: @healing.ai_provider_display
-          }
-        }
-      else
-        render json: { error: 'Healing not found' }, status: :not_found
+      respond_to do |format|
+        format.html { render template: "dashboard/healing_details" }
+        format.json do
+          if @healing
+            render json: {
+              healing: @healing,
+              timing: {
+                total_duration: @healing.duration_seconds,
+                ai_processing: @healing.ai_processing_seconds,
+                git_operations: @healing.git_operations_seconds
+              },
+              status: {
+                success: @healing.success_status,
+                evolution_method: @healing.evolution_method_display,
+                ai_provider: @healing.ai_provider_display
+              }
+            }
+          else
+            render json: { error: 'Healing not found' }, status: :not_found
+          end
+        end
+        format.any do
+          if @healing
+            render json: {
+              healing: @healing,
+              timing: {
+                total_duration: @healing.duration_seconds,
+                ai_processing: @healing.ai_processing_seconds,
+                git_operations: @healing.git_operations_seconds
+              },
+              status: {
+                success: @healing.success_status,
+                evolution_method: @healing.evolution_method_display,
+                ai_provider: @healing.ai_provider_display
+              }
+            }
+          else
+            render json: { error: 'Healing not found' }, status: :not_found
+          end
+        end
       end
     end
     
@@ -74,15 +118,8 @@ module CodeHealer
       render json: performance_data
     end
     
-    private
-    
-    def render_dashboard
-      # This will be replaced with actual dashboard view
-      render plain: "CodeHealer Dashboard - Coming Soon!\n\n" \
-                    "Total Healings: #{@summary[:total_healings]}\n" \
-                    "Success Rate: #{@summary[:success_rate]}%\n" \
-                    "Healings Today: #{@summary[:healings_today]}\n" \
-                    "Healings This Week: #{@summary[:healings_this_week]}"
+    def summary
+      render json: MetricsCollector.dashboard_summary
     end
   end
 end

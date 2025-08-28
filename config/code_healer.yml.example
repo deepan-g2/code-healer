@@ -49,7 +49,39 @@ claude_code:
 business_context:
   enabled: true
   
-  # Define business rules for specific classes
+  # Business Context Strategy
+  strategy: "jira_mcp"  # Options: "jira_mcp", "markdown", "hybrid"
+  
+  # Jira MCP Configuration (when strategy is "jira_mcp" or "hybrid")
+  jira_mcp:
+    enabled: true
+    project_key: "DGTL"  # Your Jira project key
+    search_tickets_on_error: true
+    include_business_rules: true
+    system_prompt: |
+      When fixing code, ALWAYS check Jira MCP for business context:
+      1. Search for tickets about the class/method you're fixing
+      2. Use Jira requirements to ensure your fix follows business rules
+      3. Reference specific Jira tickets in your explanation
+      4. Make sure fixes align with business requirements
+  
+  # Markdown Configuration (when strategy is "markdown" or "hybrid")
+  markdown:
+    enabled: true
+    search_paths:
+      - "docs/business_rules.md"
+      - "docs/requirements.md"
+      - "business_requirements/"
+    include_patterns:
+      - "*.md"
+      - "*.txt"
+  
+  # Hybrid Configuration (when strategy is "hybrid")
+  hybrid:
+    priority: ["jira_mcp", "markdown"]  # Which source to check first
+    combine_results: true  # Merge results from both sources
+  
+  # Define business rules for specific classes (fallback when MCP unavailable)
   User:
     domain: "User Management"
     key_rules:

@@ -11,10 +11,16 @@ module CodeHealer
         puts "File: #{file_path}"
         
         begin
-          # Build comprehensive prompt
+          # Build concise, demo-optimized prompt (no repo-wide scan, no tests)
           prompt = BusinessContextManager.build_claude_code_prompt(
             error, class_name, method_name, file_path
           )
+          prompt << "\n\nStrict instructions:" \
+                   "\n- Do NOT scan the entire codebase." \
+                   "\n- Work only with the provided file/method context and backtrace." \
+                   "\n- Return a unified diff (no prose)." \
+                   "\n- Keep changes minimal and safe." \
+                   "\n- Do NOT create or run tests." if CodeHealer::ConfigManager.demo_mode?
           
           # Execute Claude Code command
           success = execute_claude_code_fix(prompt, class_name, method_name)
@@ -25,8 +31,9 @@ module CodeHealer
             reload_modified_files
             
             # 🚀 Trigger Git operations (commit, push, PR creation)
-            puts "🔄 Starting Git operations..."
-            trigger_git_operations(error, class_name, method_name, file_path)
+            # Note: Git operations are now handled by the isolated workspace manager
+            # to prevent duplication and ensure proper isolation
+            puts "🔄 Git operations will be handled by isolated workspace manager..."
             
             return true
           else
@@ -103,29 +110,30 @@ module CodeHealer
       def build_claude_command(prompt, config)
         # Escape prompt for shell
         escaped_prompt = prompt.gsub("'", "'\"'\"'")
-        
-        # Build command template
+    
+        # Build command template for MCP tools access
         command_template = config['command_template'] || "claude --code '{prompt}'"
-        
+    
         # Replace placeholder
         command = command_template.gsub('{prompt}', escaped_prompt)
-        
-        # Add additional options if configured
-        if config['include_tests']
+    
+        # [rest of your existing code remains the same]
+        if config['include_tests'] && !CodeHealer::ConfigManager.demo_mode?
           command += " --append-system-prompt 'Include tests when fixing the code'"
+        else
+          command += " --append-system-prompt 'Do NOT create or modify tests'"
         end
-        
+    
         if config['max_file_changes']
           command += " --append-system-prompt 'Limit changes to #{config['max_file_changes']} files maximum'"
         end
-        
-        # Add file editing permissions
+    
         command += " --permission-mode acceptEdits --allowedTools Edit"
-        
-        # Add current directory access
-        command += " --add-dir ."
-        
-        command
+        command += " --append-system-prompt 'Optionally use Confluence MCP tools if available to enhance business context, but proceed regardless.'"
+        command += " --add-dir . --append-system-prompt 'Do not scan the whole repo; open only files explicitly referenced.'"
+    
+        # Return combined command
+        mcp_setup + command
       end
       
       def reload_modified_files
@@ -184,6 +192,8 @@ module CodeHealer
         
         puts "📝 Evolution attempt logged to #{log_file}"
       end
+      
+
       
       def trigger_git_operations(error, class_name, method_name, file_path)
         puts "🚀 Triggering Git operations for Claude Code evolution..."

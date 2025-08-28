@@ -60,6 +60,8 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'activesupport', '>= 6.0.0'
   spec.add_runtime_dependency 'actionpack', '>= 6.0.0'
   spec.add_runtime_dependency 'activemodel', '>= 6.0.0'
+  spec.add_runtime_dependency 'httparty', '~> 0.21.0', '>= 0.21.0'
+
 
   # Development dependencies
   spec.add_development_dependency "bundler", ">= 2.0.0"

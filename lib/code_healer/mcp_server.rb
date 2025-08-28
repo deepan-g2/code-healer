@@ -18,7 +18,9 @@ module CodeHealer
           tools: [
             ErrorAnalysisTool,
             CodeFixTool,
-            ContextAnalysisTool
+            ContextAnalysisTool,
+            JIRAIntegrationTool,  # Add Jira integration tool
+            ConfluenceIntegrationTool  # Add Confluence integration tool
           ],
           server_context: {
             codebase_context: @codebase_context,
@@ -237,13 +239,231 @@ module CodeHealer
       end
       
       def get_business_context(class_name)
-        {
+        base_context = {
           domain: determine_business_domain(class_name),
           criticality: assess_business_criticality(class_name),
           regulatory_requirements: identify_regulatory_requirements(class_name),
           sla_requirements: get_sla_requirements(class_name),
           user_impact: assess_user_impact(class_name)
         }
+        
+        # Get business context based on configured sources
+        business_context = get_configured_business_context(class_name)
+        base_context.merge!(business_context)
+        
+        base_context
+      end
+
+      def get_configured_business_context(class_name)
+        context = {}
+        
+        # Get business context based on configured strategy
+        case CodeHealer::ConfigManager.business_context_strategy
+        when 'jira_mcp'
+          if CodeHealer::ConfigManager.jira_mcp_enabled?
+            context[:strategy] = 'jira_mcp'
+            context[:instructions] = CodeHealer::ConfigManager.jira_mcp_system_prompt
+            context[:project_key] = CodeHealer::ConfigManager.jira_mcp_settings['project_key']
+          end
+        when 'markdown'
+          if CodeHealer::ConfigManager.markdown_enabled?
+            markdown_context = get_markdown_business_context(class_name)
+            context[:strategy] = 'markdown'
+            context[:markdown_context] = markdown_context
+          end
+        when 'hybrid'
+          # Combine both approaches
+          context[:strategy] = 'hybrid'
+          if CodeHealer::ConfigManager.jira_mcp_enabled?
+            context[:jira_mcp_instructions] = CodeHealer::ConfigManager.jira_mcp_system_prompt
+            context[:project_key] = CodeHealer::ConfigManager.jira_mcp_settings['project_key']
+          end
+          if CodeHealer::ConfigManager.markdown_enabled?
+            markdown_context = get_markdown_business_context(class_name)
+            context[:markdown_context] = markdown_context
+          end
+        end
+        
+        context
+      end
+      
+      def get_jira_business_context(class_name)
+        return {} unless defined?(JIRAIntegrationTool)
+        
+        begin
+          # Use MCP tool to get Jira context
+          result = JIRAIntegrationTool.call(
+            action: "search_tickets",
+            search_query: "#{class_name} business rules requirements",
+            project_key: get_default_jira_project_key,
+            server_context: {}
+          )
+          
+          if result && result.content.any?
+            data = JSON.parse(result.content.first[:text])
+            return {} if data['error']
+            
+            # Extract business context from Jira tickets
+            {
+              related_tickets: data['tickets']&.first(3) || [],
+              business_rules: extract_business_rules_from_tickets(data['tickets']),
+              requirements: extract_requirements_from_tickets(data['tickets'])
+            }
+          end
+        rescue => e
+          puts "⚠️  Failed to get Jira business context: #{e.message}"
+        end
+        
+        {}
+      end
+      
+      def get_default_jira_project_key
+        # Extract from environment or use default
+        ENV['JIRA_PROJECT_KEY'] || 'DGTL'
+      end
+      
+      def extract_business_rules_from_tickets(tickets)
+        return [] unless tickets
+        
+        tickets.flat_map do |ticket|
+          # Extract business rules from ticket summary, description, labels
+          rules = []
+          rules << ticket['summary'] if ticket['summary']&.include?('rule')
+          rules << ticket['summary'] if ticket['summary']&.include?('policy')
+          rules << ticket['summary'] if ticket['summary']&.include?('requirement')
+          rules
+        end.compact.uniq
+      end
+      
+      def extract_requirements_from_tickets(tickets)
+        return [] unless tickets
+        
+        tickets.flat_map do |ticket|
+          # Extract business context from ticket content
+          requirements = []
+          requirements << ticket['summary'] if ticket['summary']&.include?('requirement')
+          requirements << ticket['summary'] if ticket['summary']&.include?('should')
+          requirements << ticket['summary'] if ticket['summary']&.include?('need')
+          requirements
+        end.compact.uniq
+      end
+
+      # Public method for Claude Terminal to access Confluence business context
+      def get_confluence_business_context(class_name)
+        return {} unless defined?(ConfluenceIntegrationTool)
+        
+        begin
+          # Use MCP tool to get Confluence context
+          result = ConfluenceIntegrationTool.call(
+            action: "search_documents",
+            search_query: "#{class_name} PRD requirements business rules",
+            space_key: get_default_confluence_space_key,
+            server_context: {}
+          )
+          
+          if result && result.content.any?
+            data = JSON.parse(result.content.first[:text])
+            return {} if data['error']
+            
+            # Extract business context from Confluence documents
+            {
+              related_documents: data['documents']&.first(3) || [],
+              prd_content: extract_prd_content(data['documents']),
+              business_processes: extract_business_processes(data['documents'])
+            }
+          end
+        rescue => e
+          puts "⚠️  Failed to get Confluence business context: #{e.message}"
+        end
+        
+        {}
+      end
+
+      # Public method for Claude Terminal to get Confluence space key
+      def get_default_confluence_space_key
+        # Extract from environment or use default
+        ENV['CONFLUENCE_SPACE_KEY'] || 'DGTL'
+      end
+
+      # Public method for Claude Terminal to extract PRD content
+      def extract_prd_content(documents)
+        return [] unless documents
+        
+        documents.flat_map do |doc|
+          # Extract PRD content from document title, content, labels
+          content = []
+          content << doc['title'] if doc['title']&.include?('PRD')
+          content << doc['title'] if doc['title']&.include?('Product Requirements')
+          content << doc['title'] if doc['title']&.include?('Requirements')
+          content << doc['content']&.truncate(200) if doc['content']
+          content
+        end.compact.uniq
+      end
+
+      # Public method for Claude Terminal to extract business processes
+      def extract_business_processes(documents)
+        return [] unless documents
+        
+        documents.flat_map do |doc|
+          # Extract business process information from document content
+          processes = []
+          processes << doc['title'] if doc['title']&.include?('Process')
+          processes << doc['title'] if doc['title']&.include?('Workflow')
+          processes << doc['title'] if doc['title']&.include?('Procedure')
+          processes << doc['content']&.truncate(200) if doc['content']
+          processes
+        end.compact.uniq
+      end
+
+      # Public method for Claude Terminal to access Markdown business context
+      def get_markdown_business_context(class_name)
+        return {} unless CodeHealer::ConfigManager.use_markdown_context?
+        
+        begin
+          # Load from existing markdown business context
+          markdown_context = load_business_requirements_from_markdown
+          
+          if markdown_context.any?
+            {
+              markdown_files: markdown_context['markdown_requirements'] || [],
+              business_rules: extract_business_rules_from_markdown(markdown_context),
+              requirements: extract_requirements_from_markdown(markdown_context)
+            }
+          end
+        rescue => e
+          puts "⚠️  Failed to get Markdown business context: #{e.message}"
+        end
+        
+        {}
+      end
+
+      # Public method for Claude Terminal to extract business rules from markdown
+      def extract_business_rules_from_markdown(markdown_context)
+        return [] unless markdown_context['markdown_requirements']
+        
+        markdown_context['markdown_requirements'].flat_map do |file_info|
+          content = file_info[:content]
+          rules = []
+          rules << content if content.include?('rule')
+          rules << content if content.include?('policy')
+          rules << content if content.include?('requirement')
+          rules
+        end.compact.uniq
+      end
+
+      # Public method for Claude Terminal to extract requirements from markdown
+      def extract_requirements_from_markdown(markdown_context)
+        return [] unless markdown_context['markdown_requirements']
+        
+        markdown_context['markdown_requirements'].flat_map do |file_info|
+          content = file_info[:content]
+          requirements = []
+          requirements << content if content.include?('requirement')
+          requirements << content if content.include?('must')
+          requirements << content if content.include?('should')
+          requirements << content if content.include?('need')
+          requirements
+        end.compact.uniq
       end
       
       def get_evolution_history(class_name, method_name)
