@@ -197,6 +197,10 @@ module CodeHealer
         cfg = code_heal_directory_config
         cfg['sticky_workspace'] == true || cfg[:sticky_workspace] == true
       end
+
+      def persistent_workspaces_enabled?
+        code_heal_directory_config['persistent_workspaces'] != false
+      end
       
       def auto_cleanup_workspaces?
         code_heal_directory_config['auto_cleanup'] != false
@@ -389,7 +393,9 @@ module CodeHealer
             'auto_cleanup' => true,
             'cleanup_after_hours' => 24,
             'max_workspaces' => 10,
-            'clone_strategy' => 'branch'
+            'clone_strategy' => 'branch',
+            'persistent_workspaces' => true,
+            'sticky_workspace' => false
           }
         }
       end

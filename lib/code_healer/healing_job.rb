@@ -206,13 +206,13 @@ module CodeHealer
     def create_healing_workspace(class_name, method_name)
       puts "🏥 Creating isolated healing workspace for #{class_name}##{method_name}"
 
-      # Create unique workspace
+      # Create persistent workspace and checkout to target branch
       workspace_path = CodeHealer::HealingWorkspaceManager.create_healing_workspace(
         Rails.root.to_s,
-        nil  # Use current branch
+        CodeHealer::ConfigManager.pr_target_branch  # Use configured target branch
       )
 
-      puts "✅ Healing workspace created: #{workspace_path}"
+      puts "✅ Healing workspace ready: #{workspace_path}"
       workspace_path
     end
 

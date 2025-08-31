@@ -8,7 +8,7 @@ module CodeHealer
       def create_healing_workspace(repo_path, branch_name = nil)
         puts "🏥 [WORKSPACE] Starting workspace creation..."
         puts "🏥 [WORKSPACE] Repo path: #{repo_path}"
-        puts "🏥 [WORKSPACE] Branch name: #{branch_name || 'current'}"
+        puts "🏥 [WORKSPACE] Target branch: #{branch_name || 'default'}"
         
         config = CodeHealer::ConfigManager.code_heal_directory_config
         puts "🏥 [WORKSPACE] Raw config: #{config.inspect}"
@@ -16,11 +16,22 @@ module CodeHealer
         base_path = config['path'] || config[:path] || '/tmp/code_healer_workspaces'
         puts "🏥 [WORKSPACE] Base heal dir: #{base_path}"
         
-        # Create unique workspace directory
-        workspace_id = "healing_#{Time.now.to_i}_#{SecureRandom.hex(4)}"
-        workspace_path = File.join(base_path, workspace_id)
+        # Use persistent workspace ID based on repo (if enabled)
+        if CodeHealer::ConfigManager.persistent_workspaces_enabled?
+          repo_name = extract_repo_name(repo_path)
+          workspace_id = "persistent_#{repo_name}"
+          workspace_path = File.join(base_path, workspace_id)
+        else
+          # Fallback to unique workspace for each healing session
+          workspace_id = "healing_#{Time.now.to_i}_#{SecureRandom.hex(4)}"
+          workspace_path = File.join(base_path, workspace_id)
+        end
         
-        puts "🏥 [WORKSPACE] Workspace ID: #{workspace_id}"
+        if CodeHealer::ConfigManager.persistent_workspaces_enabled?
+          puts "🏥 [WORKSPACE] Persistent workspace ID: #{workspace_id}"
+        else
+          puts "🏥 [WORKSPACE] Temporary workspace ID: #{workspace_id}"
+        end
         puts "🏥 [WORKSPACE] Full workspace path: #{workspace_path}"
         
         begin
@@ -29,25 +40,28 @@ module CodeHealer
           FileUtils.mkdir_p(base_path)
           puts "🏥 [WORKSPACE] Base directory created/verified: #{base_path}"
           
-          # Clone current branch to workspace
-          strategy = clone_strategy
-          puts "🏥 [WORKSPACE] Clone strategy: #{strategy}"
-          
-          if strategy == "branch"
-            puts "🏥 [WORKSPACE] Using branch-only cloning..."
-            clone_current_branch(repo_path, workspace_path, branch_name)
+          # Check if workspace already exists
+          if Dir.exist?(workspace_path) && Dir.exist?(File.join(workspace_path, '.git'))
+            if CodeHealer::ConfigManager.persistent_workspaces_enabled?
+              puts "🏥 [WORKSPACE] Persistent workspace exists, checking out to target branch..."
+              checkout_to_branch(workspace_path, branch_name, repo_path)
+            else
+              puts "🏥 [WORKSPACE] Workspace exists but persistent mode disabled, creating new one..."
+              cleanup_workspace(workspace_path, true)
+              create_persistent_workspace(repo_path, workspace_path, branch_name)
+            end
           else
-            puts "🏥 [WORKSPACE] Using full repo cloning..."
-            clone_full_repo(repo_path, workspace_path, branch_name)
+            puts "🏥 [WORKSPACE] Creating new workspace..."
+            create_persistent_workspace(repo_path, workspace_path, branch_name)
           end
           
-          puts "🏥 [WORKSPACE] Workspace creation completed successfully!"
+          puts "🏥 [WORKSPACE] Workspace ready successfully!"
           puts "🏥 [WORKSPACE] Final workspace path: #{workspace_path}"
-          puts "🏥 [WORKSPACE] Workspace contents: #{Dir.entries(workspace_path).join(', ')}"
+          puts "🏥 [WORKSPACE] Current branch: #{get_current_branch(workspace_path)}"
           workspace_path
         rescue => e
-          puts "❌ Failed to create healing workspace: #{e.message}"
-          cleanup_workspace(workspace_path) if Dir.exist?(workspace_path)
+          puts "❌ Failed to create/prepare healing workspace: #{e.message}"
+          # Don't cleanup persistent workspace on error
           raise e
         end
       end
@@ -202,12 +216,22 @@ module CodeHealer
         end
       end
       
-      def cleanup_workspace(workspace_path)
+      def cleanup_workspace(workspace_path, force = false)
         puts "🧹 [WORKSPACE] Starting workspace cleanup..."
         puts "🧹 [WORKSPACE] Target: #{workspace_path}"
+        puts "🧹 [WORKSPACE] Force cleanup: #{force}"
         puts "🧹 [WORKSPACE] Exists: #{Dir.exist?(workspace_path)}"
         
         return unless Dir.exist?(workspace_path)
+        
+        # Check if this is a persistent workspace
+        is_persistent = workspace_path.include?('persistent_')
+        
+        if is_persistent && !force
+          puts "🧹 [WORKSPACE] This is a persistent workspace - skipping cleanup"
+          puts "🧹 [WORKSPACE] Use force=true to override"
+          return
+        end
         
         # Remove .git directory first to avoid conflicts
         git_dir = File.join(workspace_path, '.git')
@@ -290,6 +314,123 @@ module CodeHealer
         end
       end
       
+      def extract_repo_name(repo_path)
+        # Extract repo name from path or git remote
+        if File.exist?(File.join(repo_path, '.git'))
+          Dir.chdir(repo_path) do
+            remote_url = `git config --get remote.origin.url`.strip
+            if remote_url.include?('/')
+              remote_url.split('/').last.gsub('.git', '')
+            else
+              File.basename(repo_path)
+            end
+          end
+        else
+          File.basename(repo_path)
+        end
+      end
+
+      def create_persistent_workspace(repo_path, workspace_path, branch_name)
+        puts "🏥 [WORKSPACE] Creating new persistent workspace..."
+        
+        # Get the GitHub remote URL
+        Dir.chdir(repo_path) do
+          remote_url = `git config --get remote.origin.url`.strip
+          if remote_url.empty?
+            puts "❌ [WORKSPACE] No remote origin found in #{repo_path}"
+            return false
+          end
+          
+          puts "🏥 [WORKSPACE] Cloning from: #{remote_url}"
+          puts "🏥 [WORKSPACE] To workspace: #{workspace_path}"
+          
+          # Clone the full repository for persistent use
+          result = system("git clone #{remote_url} #{workspace_path}")
+          if result
+            puts "🏥 [WORKSPACE] Repository cloned successfully"
+            # Now checkout to the target branch
+            checkout_to_branch(workspace_path, branch_name, repo_path)
+          else
+            puts "❌ [WORKSPACE] Failed to clone repository"
+            return false
+          end
+        end
+      end
+
+      def checkout_to_branch(workspace_path, branch_name, repo_path)
+        puts "🏥 [WORKSPACE] Checking out to target branch..."
+        
+        # Determine target branch
+        target_branch = branch_name || CodeHealer::ConfigManager.pr_target_branch || get_default_branch(repo_path)
+        puts "🏥 [WORKSPACE] Target branch: #{target_branch}"
+        
+        Dir.chdir(workspace_path) do
+          # Fetch latest changes
+          puts "🏥 [WORKSPACE] Fetching latest changes..."
+          system("git fetch origin")
+          
+          # Check if branch exists locally
+          local_branch_exists = system("git show-ref --verify --quiet refs/heads/#{target_branch}")
+          
+          if local_branch_exists
+            puts "🏥 [WORKSPACE] Checking out existing local branch: #{target_branch}"
+            system("git checkout #{target_branch}")
+          else
+            puts "🏥 [WORKSPACE] Checking out remote branch: #{target_branch}"
+            system("git checkout -b #{target_branch} origin/#{target_branch}")
+          end
+          
+          # Pull latest changes
+          puts "🏥 [WORKSPACE] Pulling latest changes..."
+          system("git pull origin #{target_branch}")
+          
+          puts "🏥 [WORKSPACE] Successfully checked out to: #{target_branch}"
+        end
+      end
+
+      def get_default_branch(repo_path)
+        Dir.chdir(repo_path) do
+          # Try to get default branch from remote
+          default_branch = `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null`.strip
+          if default_branch.include?('origin/')
+            default_branch.gsub('refs/remotes/origin/', '')
+          else
+            # Fallback to common defaults
+            ['main', 'master'].find { |branch| system("git ls-remote --heads origin #{branch} >/dev/null 2>&1") }
+          end
+        end
+      end
+
+      def get_current_branch(workspace_path)
+        Dir.chdir(workspace_path) do
+          `git branch --show-current`.strip
+        end
+      rescue
+        'unknown'
+      end
+
+      def reset_workspace_to_clean_state(workspace_path, branch_name = nil)
+        puts "🔄 [WORKSPACE] Resetting workspace to clean state..."
+        
+        Dir.chdir(workspace_path) do
+          # Stash any uncommitted changes
+          puts "🔄 [WORKSPACE] Stashing any uncommitted changes..."
+          system("git stash")
+          
+          # Reset to clean state
+          puts "🔄 [WORKSPACE] Resetting to clean state..."
+          system("git reset --hard HEAD")
+          system("git clean -fd")
+          
+          # Checkout to target branch if specified
+          if branch_name
+            checkout_to_branch(workspace_path, branch_name, nil)
+          end
+          
+          puts "🔄 [WORKSPACE] Workspace reset to clean state"
+        end
+      end
+
       def clone_strategy
         cfg = CodeHealer::ConfigManager.code_heal_directory_config
         cfg['clone_strategy'] || cfg[:clone_strategy] || "branch"
