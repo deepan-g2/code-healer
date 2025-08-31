@@ -176,9 +176,7 @@ module CodeHealer
         demo_mode? && demo_settings['skip_tests'] != false
       end
 
-      def demo_skip_pr?
-        demo_mode? && demo_settings['skip_pr'] != false
-      end
+
 
       def git_settings
         config['git'] || {}
@@ -369,8 +367,7 @@ module CodeHealer
           },
           'demo' => {
             'enabled' => false,
-            'skip_tests' => true,
-            'skip_pr' => true
+            'skip_tests' => true
           },
           'git' => {
             'auto_commit' => true,

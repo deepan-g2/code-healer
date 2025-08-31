@@ -428,7 +428,7 @@ enable_demo_mode = ask_for_yes_no("Enable demo mode for fast demonstrations?", d
 demo_config = {}
 if enable_demo_mode
   demo_config[:skip_tests] = ask_for_yes_no("Skip test generation in demo mode?", default: true)
-  demo_config[:skip_pr] = ask_for_yes_no("Skip pull request creation in demo mode?", default: true)
+
   
   puts
   puts "🚀 Demo mode will significantly speed up healing operations!"
@@ -440,7 +440,7 @@ if enable_demo_mode
   puts "   - Timeout reduced to 60 seconds for quick responses"
   puts "   - Sticky workspace enabled for faster context loading"
   puts "   - Claude session persistence for better performance"
-  puts "   - Tests and PRs skipped for immediate results"
+  puts "   - Tests skipped for immediate results (PRs still created)"
 end
 
 # Create configuration files
@@ -617,7 +617,6 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
     demo:
       enabled: #{enable_demo_mode}
       skip_tests: #{demo_config[:skip_tests] || false}
-      skip_pr: #{demo_config[:skip_pr] || false}
     
     # Performance Configuration
     performance:
