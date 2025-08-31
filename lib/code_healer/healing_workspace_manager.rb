@@ -285,17 +285,25 @@ module CodeHealer
         begin
           require 'octokit'
           
-          config = CodeHealer::ConfigManager.config
-          github_token = ENV['GITHUB_TOKEN']
-          repo_name = config['github_repo'] || config[:github_repo]
+          # Try to get GitHub token from environment
+          github_token = ENV['GITHUB_TOKEN'] || ENV['GITHUB_ACCESS_TOKEN']
           
-          unless github_token && repo_name
-            puts "❌ Missing GitHub token or repository configuration"
+          unless github_token
+            puts "❌ Missing GitHub token. Set GITHUB_TOKEN environment variable"
+            puts "💡 You can create a token at: https://github.com/settings/tokens"
             return nil
           end
           
-          # Parse repo name (owner/repo)
-          owner, repo = repo_name.split('/')
+          # Auto-detect repository from git remote
+          repo_name = detect_github_repository
+          
+          unless repo_name
+            puts "❌ Could not detect GitHub repository from git remote"
+            puts "💡 Make sure your repository has a GitHub remote origin"
+            return nil
+          end
+          
+          puts "🔗 Creating PR for repository: #{repo_name}"
           
           client = Octokit::Client.new(access_token: github_token)
           
@@ -310,11 +318,39 @@ module CodeHealer
             "Generated at: #{Time.now.strftime('%Y-%m-%d %H:%M:%S')}"
           )
           
+          puts "✅ Pull request created successfully: #{pr.html_url}"
           pr.html_url
         rescue => e
           puts "❌ Failed to create pull request: #{e.message}"
+          puts "💡 Check your GitHub token and repository access"
           nil
         end
+      end
+
+      def detect_github_repository
+        # Try to detect from current git remote
+        Dir.chdir(Dir.pwd) do
+          remote_url = `git config --get remote.origin.url`.strip
+          
+          if remote_url.include?('github.com')
+            # Extract owner/repo from GitHub URL
+            if remote_url.include?('git@github.com:')
+              # SSH format: git@github.com:owner/repo.git
+              repo_part = remote_url.gsub('git@github.com:', '').gsub('.git', '')
+            elsif remote_url.include?('https://github.com/')
+              # HTTPS format: https://github.com/owner/repo.git
+              repo_part = remote_url.gsub('https://github.com/', '').gsub('.git', '')
+            else
+              return nil
+            end
+            puts "🔍 Detected GitHub repository: #{repo_part}"
+            return repo_part
+          end
+        end
+        
+        nil
+      rescue
+        nil
       end
       
       def extract_repo_name(repo_path)

@@ -112,7 +112,7 @@ module CodeHealer
         escaped_prompt = prompt.gsub("'", "'\"'\"'")
     
         # Build command template for MCP tools access
-        command_template = config['command_template'] || "claude --print '{prompt}' --output-format text"
+        command_template = config['command_template'] || "claude --print '{prompt}' --output-format text --allowedTools Edit,mcp__atlassian"
     
         # Replace placeholder
         command = command_template.gsub('{prompt}', escaped_prompt)
@@ -130,8 +130,11 @@ module CodeHealer
           end
         end
     
+        # Add MCP tool permissions for business context
+        command += " --allowedTools 'mcp__atlassian'"
+        
         # Add business context instructions
-        command += " --append-system-prompt 'Use available MCP tools for business context if needed, but proceed with the fix regardless.'"
+        command += " --append-system-prompt 'Use the Atlassian MCP tools (Confluence/Jira) for business context if needed, but proceed with the fix regardless.'"
     
         # Return command
         command
