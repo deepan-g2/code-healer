@@ -112,7 +112,7 @@ module CodeHealer
         escaped_prompt = prompt.gsub("'", "'\"'\"'")
     
         # Build command template for MCP tools access
-        command_template = config['command_template'] || "claude --code '{prompt}'"
+        command_template = config['command_template'] || "claude --print '{prompt}' --output-format text"
     
         # Replace placeholder
         command = command_template.gsub('{prompt}', escaped_prompt)
