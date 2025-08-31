@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.23] - 2025-08-27
+
+### Added
+- **Persistent Isolated Workspaces**: Implemented persistent workspaces that reuse the same isolated environment instead of cloning each time
+- **Smart Branch Checkout**: Workspaces now checkout to the configured target branch instead of cloning the current working branch
+- **Workspace Reset**: Added ability to reset workspace to clean state without deleting the entire workspace
+- **Configuration Control**: Added `persistent_workspaces` and `sticky_workspace` configuration options
+
+### Changed
+- **Workspace Strategy**: Changed from cloning new workspaces each time to reusing persistent workspaces with branch checkout
+- **Performance**: Significantly faster healing operations by avoiding repeated repository cloning
+- **Branch Targeting**: Workspaces now target the configured `pr_target_branch` instead of the current working branch
+
+### Fixed
+- **Branch Consistency**: Ensures fixes are always applied to the correct target branch regardless of current working branch
+
 ## [0.1.22] - 2025-08-27
 
 ### Fixed
