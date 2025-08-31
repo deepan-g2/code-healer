@@ -5,11 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.22] - 2025-08-27
+
+### Fixed
+- **Critical Flag Fix**: Fixed Claude Terminal command to use correct `--print` flag instead of unsupported `--code` flag
+- **Command Compatibility**: Ensured all Claude Terminal flags are compatible with the `--print` command
+- **Fallback Template**: Updated fallback command template to use correct flags
+
 ## [0.1.21] - 2025-08-27
 
 ### Fixed
 - **Critical Bug Fix**: Resolved `mcp_setup` undefined method error in Claude Code evolution handler
-- **Claude Command Fix**: Fixed command template to use `--code` instead of `--print` for proper code editing
+- **Claude Command Fix**: Fixed command template to use `--print` instead of `--code` for proper code editing
 - **Demo Mode Enhancement**: Improved demo mode handling with optimized Claude command building
 - **Command Cleanup**: Removed duplicate permission flags and incompatible command options
 
