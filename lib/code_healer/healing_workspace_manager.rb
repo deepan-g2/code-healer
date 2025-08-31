@@ -145,6 +145,43 @@ module CodeHealer
         end
       end
       
+      def validate_workspace_for_commit(workspace_path)
+        puts "🔍 [WORKSPACE] Validating workspace for commit..."
+        
+        Dir.chdir(workspace_path) do
+          # Check for any temporary files that might have been added
+          staged_files = `git diff --cached --name-only`.strip.split("\n")
+          working_files = `git status --porcelain | grep '^ M\\|^M \\|^A ' | awk '{print $2}'`.strip.split("\n")
+          
+          all_files = (staged_files + working_files).uniq.reject(&:empty?)
+          
+          puts "🔍 [WORKSPACE] Files to be committed: #{all_files.join(', ')}"
+          
+          # Check for any temporary files
+          temp_files = all_files.select { |file| should_skip_file?(file) }
+          
+          if temp_files.any?
+            puts "⚠️ [WORKSPACE] WARNING: Temporary files detected in commit:"
+            temp_files.each { |file| puts "   - #{file}" }
+            
+            # Remove them from staging
+            temp_files.each do |file|
+              puts "🗑️ [WORKSPACE] Removing temporary file from staging: #{file}"
+              system("git reset HEAD '#{file}' 2>/dev/null || true")
+            end
+            
+            puts "🔍 [WORKSPACE] Temporary files removed from staging"
+            return false
+          end
+          
+          puts "✅ [WORKSPACE] Workspace validation passed - no temporary files detected"
+          return true
+        end
+      rescue => e
+        puts "❌ [WORKSPACE] Workspace validation failed: #{e.message}"
+        return false
+      end
+      
       def create_healing_branch(repo_path, workspace_path, branch_name)
         puts "🔄 Creating healing branch and PR from isolated workspace"
         
@@ -171,6 +208,12 @@ module CodeHealer
             
             # Add all changes (the fixes are already applied in the workspace)
             add_only_relevant_files(workspace_path)
+            
+            # Validate workspace before commit to ensure no temporary files
+            unless validate_workspace_for_commit(workspace_path)
+              puts "⚠️ [WORKSPACE] Workspace validation failed, retrying file addition..."
+              add_only_relevant_files(workspace_path)
+            end
             
             # Check if there are changes to commit
             if system("git diff --cached --quiet") == false
@@ -428,11 +471,26 @@ module CodeHealer
           system("git reset --hard HEAD")
           system("git clean -fd")
           
-          # Remove any tracked tmp/ files that shouldn't be committed
+          # Remove any tracked temporary files that shouldn't be committed - AGGRESSIVE cleanup
           puts "🏥 [WORKSPACE] Removing tracked temporary files..."
+          
+          # Remove root level temporary directories
           system("git rm -r --cached tmp/ 2>/dev/null || true")
           system("git rm -r --cached log/ 2>/dev/null || true")
           system("git rm -r --cached .bundle/ 2>/dev/null || true")
+          system("git rm -r --cached storage/ 2>/dev/null || true")
+          system("git rm -r --cached coverage/ 2>/dev/null || true")
+          system("git rm -r --cached .yardoc/ 2>/dev/null || true")
+          system("git rm -r --cached .rspec_status 2>/dev/null || true")
+          
+          # Remove any nested tmp/ or log/ directories that might be tracked
+          system("find . -name 'tmp' -type d -exec git rm -r --cached {} + 2>/dev/null || true")
+          system("find . -name 'log' -type d -exec git rm -r --cached {} + 2>/dev/null || true")
+          
+          # Remove any .tmp, .log, .cache files
+          system("find . -name '*.tmp' -exec git rm --cached {} + 2>/dev/null || true")
+          system("find . -name '*.log' -exec git rm --cached {} + 2>/dev/null || true")
+          system("find . -name '*.cache' -exec git rm --cached {} + 2>/dev/null || true")
           
           puts "🏥 [WORKSPACE] Successfully checked out to: #{target_branch}"
         end
@@ -499,8 +557,9 @@ module CodeHealer
       end
 
       def should_skip_file?(file_path)
-        # Skip temporary and generated files
+        # Skip temporary and generated files - AGGRESSIVE filtering
         skip_patterns = [
+          # Root level directories - NEVER commit these
           /^tmp\//,
           /^log\//,
           /^\.git\//,
@@ -511,17 +570,48 @@ module CodeHealer
           /^\.bundle\//,
           /^bootsnap/,
           /^cache/,
+          /^storage\//,
+          /^coverage\//,
+          /^\.yardoc\//,
+          /^\.rspec_status/,
+          
+          # Any tmp/ directory at any level
+          /tmp\//,
+          
+          # Any log/ directory at any level  
+          /log\//,
+          
+          # Specific tmp subdirectories
           /tmp\/cache\//,
           /tmp\/bootsnap\//,
           /tmp\/pids\//,
           /tmp\/sockets\//,
+          /tmp\/sessions\//,
+          /tmp\/backup\//,
+          /tmp\/test\//,
+          
+          # File extensions
           /\.tmp$/,
           /\.log$/,
           /\.cache$/,
           /\.swp$/,
           /\.swo$/,
-          /~$/
+          /\.bak$/,
+          /\.backup$/,
+          /~$/,
+          
+          # Rails specific
+          /\.bundle\//,
+          /Gemfile\.lock\.backup/,
+          /config\/database\.yml\.backup/,
+          /config\/secrets\.yml\.backup/
         ]
+        
+        # Additional check: if path contains 'tmp' or 'log' anywhere, skip it
+        if file_path.include?('tmp') || file_path.include?('log')
+          puts "📁 [WORKSPACE] Skipping file containing 'tmp' or 'log': #{file_path}"
+          return true
+        end
         
         skip_patterns.any? { |pattern| file_path.match?(pattern) }
       end
