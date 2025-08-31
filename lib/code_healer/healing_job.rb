@@ -172,6 +172,24 @@ module CodeHealer
       puts "🔍 [HEALING_JOB] MCP tools check complete"
     end
 
+    def extract_file_path_from_error(error)
+      return nil unless error&.backtrace
+      
+      # Look for the first line that contains a file path
+      error.backtrace.each do |line|
+        if line.match?(/^(.+\.rb):\d+:in/)
+          file_path = $1
+          # Convert to absolute path if it's relative
+          if file_path.start_with?('./') || !file_path.start_with?('/')
+            file_path = File.expand_path(file_path)
+          end
+          return file_path
+        end
+      end
+      
+      nil
+    end
+    
     def parse_args(args)
       # Formats supported:
       # 1) [error_class, error_message, class_name, method_name, evolution_method, backtrace]
