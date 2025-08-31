@@ -170,7 +170,7 @@ module CodeHealer
             system("git status --porcelain")
             
             # Add all changes (the fixes are already applied in the workspace)
-            system("git add .")
+            add_only_relevant_files(workspace_path)
             
             # Check if there are changes to commit
             if system("git diff --cached --quiet") == false
@@ -387,6 +387,11 @@ module CodeHealer
           puts "🏥 [WORKSPACE] Pulling latest changes..."
           system("git pull origin #{target_branch}")
           
+          # Ensure workspace is clean
+          puts "🏥 [WORKSPACE] Ensuring workspace is clean..."
+          system("git reset --hard HEAD")
+          system("git clean -fd")
+          
           puts "🏥 [WORKSPACE] Successfully checked out to: #{target_branch}"
         end
       end
@@ -410,6 +415,69 @@ module CodeHealer
         end
       rescue
         'unknown'
+      end
+
+      def add_only_relevant_files(workspace_path)
+        puts "📁 [WORKSPACE] Adding only relevant files, respecting .gitignore..."
+        
+        Dir.chdir(workspace_path) do
+          # First, ensure .gitignore is respected
+          if File.exist?('.gitignore')
+            puts "📁 [WORKSPACE] Using repository's .gitignore file"
+          else
+            puts "📁 [WORKSPACE] No .gitignore found, using default patterns"
+          end
+          
+          # Get list of modified files
+          modified_files = `git status --porcelain | grep '^ M\\|^M \\|^A ' | awk '{print $2}'`.strip.split("\n")
+          
+          if modified_files.empty?
+            puts "📁 [WORKSPACE] No modified files to add"
+            return
+          end
+          
+          puts "📁 [WORKSPACE] Modified files: #{modified_files.join(', ')}"
+          
+          # Add each modified file individually
+          modified_files.each do |file|
+            next if file.empty?
+            
+            # Skip temporary and generated files
+            if should_skip_file?(file)
+              puts "📁 [WORKSPACE] Skipping temporary file: #{file}"
+              next
+            end
+            
+            puts "📁 [WORKSPACE] Adding file: #{file}"
+            system("git add '#{file}'")
+          end
+          
+          puts "📁 [WORKSPACE] File addition completed"
+        end
+      end
+
+      def should_skip_file?(file_path)
+        # Skip temporary and generated files
+        skip_patterns = [
+          /^tmp\//,
+          /^log\//,
+          /^\.git\//,
+          /^node_modules\//,
+          /^vendor\//,
+          /^public\/packs/,
+          /^public\/assets/,
+          /^\.bundle\//,
+          /^bootsnap/,
+          /^cache/,
+          /\.tmp$/,
+          /\.log$/,
+          /\.cache$/,
+          /\.swp$/,
+          /\.swo$/,
+          /~$/
+        ]
+        
+        skip_patterns.any? { |pattern| file_path.match?(pattern) }
       end
 
       def reset_workspace_to_clean_state(workspace_path, branch_name = nil)
