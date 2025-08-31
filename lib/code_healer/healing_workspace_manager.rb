@@ -428,7 +428,7 @@ module CodeHealer
           system("git reset --hard HEAD")
           system("git clean -fd")
           
-          # Remove any tracked tmp/ files that shouldn't be committed
+y          # Remove any tracked tmp/ files that shouldn't be committed
           puts "🏥 [WORKSPACE] Removing tracked temporary files..."
           system("git rm -r --cached tmp/ 2>/dev/null || true")
           system("git rm -r --cached log/ 2>/dev/null || true")

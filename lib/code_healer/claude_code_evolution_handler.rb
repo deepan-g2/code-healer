@@ -131,7 +131,7 @@ module CodeHealer
         end
     
         # Add business context instructions
-        command += " --append-system-prompt 'Use the Atlassian MCP tools (Confluence/Jira) for business context if needed, but proceed with the fix regardless.'"
+        command += " --append-system-prompt 'CRITICAL: Before fixing any code, you MUST use the Atlassian MCP tools to search Confluence for business context. Search for documentation about the class and method you are fixing. Only proceed with the fix after reviewing the business requirements from Confluence. If no documentation is found, note this in your response.'"
     
         # Return command
         command

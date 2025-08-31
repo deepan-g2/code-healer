@@ -181,30 +181,43 @@ module CodeHealer
         business_context = case CodeHealer::ConfigManager.business_context_strategy
         when 'confluence_only'
           "## Business Context Instructions:\n" \
-          "OPTIONAL: You can use Confluence MCP tools to enhance business context if available.\n\n" \
-          "1. If Confluence MCP is available:\n" \
+          "MANDATORY: You MUST use Confluence MCP tools to search for business context before fixing any code.\n\n" \
+          "1. **REQUIRED - Search Confluence for business context:**\n" \
           "   - Search for PRDs/specs related to '#{class_name}' / '#{method_name}'.\n" \
           "   - Query terms: '#{class_name}', '#{method_name}', 'business rules', 'validation patterns'.\n" \
-          "   - Apply any found documentation to your fix.\n\n" \
-          "2. If Confluence MCP is not available:\n" \
+          "   - Search for domain-specific business logic and requirements.\n" \
+          "   - Look for validation rules and business constraints.\n\n" \
+          "2. **After finding business context:**\n" \
+          "   - Apply ALL found business rules to your fix.\n" \
+          "   - Ensure the fix follows the documented business requirements.\n" \
+          "   - Validate that your solution aligns with business logic.\n\n" \
+          "3. **If no documentation is found:**\n" \
+          "   - Note this explicitly in your response.\n" \
           "   - Proceed with standard business logic and error handling practices.\n" \
           "   - Use common validation patterns and best practices.\n\n" \
-          "Note: MCP usage is optional - proceed with or without it."
+          "CRITICAL: You MUST search Confluence first - this is not optional!"
         when 'claude_atlassian_mcp'
           "## Business Context Instructions:\n" \
-          "OPTIONAL: You can use Atlassian MCP tools to enhance business context if available.\n\n" \
-          "1. **If Jira MCP is available:**\n" \
+          "MANDATORY: You MUST use Atlassian MCP tools to search for business context before fixing any code.\n\n" \
+          "1. **REQUIRED - Search Jira for business context:**\n" \
           "   - Search for tickets related to '#{class_name}' or '#{method_name}'\n" \
           "   - Look for bug reports, requirements, or business rules\n" \
-          "   - Apply any found ticket context to your fix\n\n" \
-          "2. **If Confluence MCP is available:**\n" \
+          "   - Search for domain-specific business logic and constraints\n" \
+          "   - Apply ALL found ticket context to your fix\n\n" \
+          "2. **REQUIRED - Search Confluence for business context:**\n" \
           "   - Search for PRDs, technical specs, or business process docs\n" \
           "   - Look for domain-specific business rules related to '#{class_name}'\n" \
-          "   - Apply any found documentation to your fix\n\n" \
-          "3. **If MCP tools are not available:**\n" \
-          "   - Proceed with standard business logic and error handling practices\n" \
-          "   - Use common validation patterns and best practices\n\n" \
-          "Note: MCP usage is optional - proceed with or without it."
+          "   - Search for validation patterns and business requirements\n" \
+          "   - Apply ALL found documentation to your fix\n\n" \
+          "3. **After finding business context:**\n" \
+          "   - Ensure your fix follows ALL documented business requirements\n" \
+          "   - Validate that your solution aligns with business logic\n" \
+          "   - Apply business rules and constraints to your solution\n\n" \
+          "4. **If no documentation is found:**\n" \
+          "   - Note this explicitly in your response.\n" \
+          "   - Proceed with standard business logic and error handling practices.\n" \
+          "   - Use common validation patterns and best practices.\n\n" \
+          "CRITICAL: You MUST search both Jira and Confluence first - this is not optional!"
         when 'jira_mcp'
           # Use Jira MCP context
           get_jira_business_context(class_name)
@@ -236,12 +249,15 @@ module CodeHealer
           
           ## Instructions:
           Please:
-          1. Analyze the error and understand the root cause
-          2. **IMPORTANT: Check if the fix requires changes to multiple files or if the root cause is in a different file**
-          3. Fix the issue considering the business rules above
-          4. Ensure the fix doesn't break other functionality
-          5. Follow Rails conventions and patterns
-          6. Make sure to write testcases for the fix
+          1. **CRITICAL: First, use Atlassian MCP tools to search for business context about '#{class_name}' and '#{method_name}'**
+          2. **REQUIRED: Search Confluence for business rules, PRDs, and validation patterns**
+          3. **REQUIRED: Search Jira for related tickets and business requirements**
+          4. Analyze the error and understand the root cause
+          5. **IMPORTANT: Check if the fix requires changes to multiple files or if the root cause is in a different file**
+          6. Fix the issue considering the business rules found in MCP tools
+          7. Ensure the fix doesn't break other functionality
+          8. Follow Rails conventions and patterns
+          9. Make sure to write testcases for the fix
           
           ## IMPORTANT: Full Codebase Access & Multi-File Fixes
           You have permission to edit ANY files in the codebase. Please:
