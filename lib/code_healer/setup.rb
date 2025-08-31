@@ -523,7 +523,7 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
         - ".git/"
         - "node_modules/"
         - "vendor/"
-              command_template: "claude --print '{prompt}' --output-format text --permission-mode acceptEdits --allowedTools Edit,mcp__atlassian"
+      command_template: "claude --print '{prompt}' --output-format text --permission-mode acceptEdits --allowedTools Edit,mcp__atlassian"
       business_context_sources:
         - "config/business_rules.yml"
         - "docs/business_logic.md"
