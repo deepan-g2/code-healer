@@ -130,9 +130,6 @@ module CodeHealer
           end
         end
     
-        # Add MCP tool permissions for business context
-        command += " --allowedTools 'mcp__atlassian'"
-        
         # Add business context instructions
         command += " --append-system-prompt 'Use the Atlassian MCP tools (Confluence/Jira) for business context if needed, but proceed with the fix regardless.'"
     
