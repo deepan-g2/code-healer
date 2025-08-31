@@ -172,7 +172,7 @@ module CodeHealer
       puts "🔍 [HEALING_JOB] MCP tools check complete"
     end
 
-    def extract_file_path_from_error(error)
+     def extract_file_path_from_error(error)
       return nil unless error&.backtrace
       
       # Look for the first line that contains a file path

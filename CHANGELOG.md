@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.24] - 2025-08-31
+
+### Added
+- **Aggressive File Filtering**: Implemented comprehensive filtering to prevent `tmp/`, `log/`, and other temporary files from being committed
+- **Pre-Commit Validation**: Added workspace validation before commit to ensure no temporary files slip through
+- **Mandatory MCP Usage**: Enhanced business context prompts to force Claude to use Atlassian MCP tools for Confluence/Jira integration
+- **Missing Method Fix**: Added `extract_file_path_from_error` method to resolve undefined method errors
+
+### Changed
+- **File Filtering**: Enhanced `should_skip_file?` method with aggressive patterns for temporary files at any level
+- **Git Cleanup**: Comprehensive cleanup of tracked temporary files using `git rm --cached` and `find` commands
+- **Business Context**: Changed from "optional" to "mandatory" MCP tool usage in prompts
+- **Setup Configuration**: Fixed `setup.rb` to include `mcp__atlassian` permission in command template
+
+### Fixed
+- **Temporary File Commits**: Prevents `tmp/`, `log/`, `storage/`, `coverage/` directories from being committed
+- **MCP Tool Access**: Fixed missing `mcp__atlassian` permission in setup script
+- **Syntax Error**: Removed stray `y` character that caused Ruby syntax errors
+- **Method Missing**: Added missing `extract_file_path_from_error` method to `HealingJob` class
+
 ## [0.1.23] - 2025-08-27
 
 ### Added
