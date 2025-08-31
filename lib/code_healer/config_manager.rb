@@ -346,7 +346,7 @@ module CodeHealer
             'timeout' => 300,
             'max_file_changes' => 10,
             'include_tests' => true,
-            'command_template' => "claude --print '{prompt}' --output-format text --permission-mode acceptEdits --allowedTools Edit",
+            'command_template' => "claude --code '{prompt}' --permission-mode acceptEdits --allowedTools Edit",
             'business_context_sources' => [
               'config/business_rules.yml',
               'docs/business_logic.md',

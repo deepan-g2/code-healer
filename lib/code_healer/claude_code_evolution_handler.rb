@@ -117,23 +117,24 @@ module CodeHealer
         # Replace placeholder
         command = command_template.gsub('{prompt}', escaped_prompt)
     
-        # [rest of your existing code remains the same]
-        if config['include_tests'] && !CodeHealer::ConfigManager.demo_mode?
-          command += " --append-system-prompt 'Include tests when fixing the code'"
+        # Add demo mode specific instructions
+        if CodeHealer::ConfigManager.demo_mode?
+          command += " --append-system-prompt 'DEMO MODE: Focus on quick fixes, skip tests, limit file changes to #{config['max_file_changes'] || 3} files maximum'"
         else
-          command += " --append-system-prompt 'Do NOT create or modify tests'"
+          if config['include_tests']
+            command += " --append-system-prompt 'Include tests when fixing the code'"
+          end
+          
+          if config['max_file_changes']
+            command += " --append-system-prompt 'Limit changes to #{config['max_file_changes']} files maximum'"
+          end
         end
     
-        if config['max_file_changes']
-          command += " --append-system-prompt 'Limit changes to #{config['max_file_changes']} files maximum'"
-        end
+        # Add business context instructions
+        command += " --append-system-prompt 'Use available MCP tools for business context if needed, but proceed with the fix regardless.'"
     
-        command += " --permission-mode acceptEdits --allowedTools Edit"
-        command += " --append-system-prompt 'Optionally use Confluence MCP tools if available to enhance business context, but proceed regardless.'"
-        command += " --add-dir . --append-system-prompt 'Do not scan the whole repo; open only files explicitly referenced.'"
-    
-        # Return combined command
-        mcp_setup + command
+        # Return command
+        command
       end
       
       def reload_modified_files
