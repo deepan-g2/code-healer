@@ -1,3 +1,8 @@
+## [0.1.33] - 2025-09-15
+
+### Fixed
+- Syntax error in `HealingWorkspaceManager#test_fixes_in_workspace` unmatched `end` corrected.
+
 ## [0.1.32] - 2025-09-15
 
 ### Added

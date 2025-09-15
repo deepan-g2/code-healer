@@ -119,26 +119,24 @@ module CodeHealer
             end
             
             # Run tests if available
-              # Run tests if available
-              if File.exist?('Gemfile')
-                bundle_check = system("bundle check >/dev/null 2>&1")
-                unless bundle_check
-                  PresentationLogger.error("Bundle check failed")
-                  return false
-                end
-                
-                # Run tests if RSpec is available
-                if File.exist?('spec') || File.exist?('test')
-                  test_result = system("bundle exec rspec --dry-run >/dev/null 2>&1") ||
-                               system("bundle exec rake test:prepare >/dev/null 2>&1")
-                  PresentationLogger.detail("Test preparation: #{test_result ? 'passed' : 'skipped'}")
-                end
+            if File.exist?('Gemfile')
+              bundle_check = system("bundle check >/dev/null 2>&1")
+              unless bundle_check
+                PresentationLogger.error("Bundle check failed")
+                return false
+              end
+              
+              # Run tests if RSpec is available
+              if File.exist?('spec') || File.exist?('test')
+                test_result = system("bundle exec rspec --dry-run >/dev/null 2>&1") ||
+                             system("bundle exec rake test:prepare >/dev/null 2>&1")
+                PresentationLogger.detail("Test preparation: #{test_result ? 'passed' : 'skipped'}")
               end
             end
-            
-            PresentationLogger.success("Validation passed")
-            true
           end
+          
+          PresentationLogger.success("Validation passed")
+          true
         rescue => e
           PresentationLogger.error("Validation failed: #{e.message}")
           false
