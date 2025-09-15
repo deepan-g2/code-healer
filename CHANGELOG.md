@@ -1,3 +1,19 @@
+## [0.1.32] - 2025-09-15
+
+### Added
+- Targeted RSpec test-fix loop after code changes in `ClaudeCodeEvolutionHandler`:
+  - Runs specs for files related to recent modifications
+  - Parses failures and re-invokes Claude with failure summary
+  - Iterates up to `test_fix.max_iterations` (default 2)
+- Configuration: `test_fix.max_iterations` with sensible default in `ConfigManager` and `setup.rb`.
+
+### Changed
+- Removed demo mode code and comments across gem: prompts, setup script, logger phrasing, and workspace manager.
+- Switched class targeting to excluded-classes-only model; removed `allowed_classes` usage in config managers and setup generation.
+
+### Notes
+- Backwards compatible; no breaking API changes. Configure `test_fix.max_iterations` in `config/code_healer.yml` to tune retries.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -6,6 +22,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.24] - 2025-08-31
+
+## [0.1.26] - 2025-09-03
+
+### Added
+- **Enhanced PresentationLogger**: Improved with backtrace truncation, timing display, and specialized action methods
+- **Smart Value Truncation**: Long arrays and strings are intelligently truncated for clean presentation
+- **Timing Integration**: Total healing time displayed in final outcome
+- **Action-Specific Logging**: `claude_action`, `workspace_action`, `git_action` methods for contextual logging
+
+### Changed
+- **Workspace Logs**: Dramatically reduced verbosity while maintaining key information
+- **Backtrace Display**: Shows only first 3 relevant lines with clean formatting
+- **Git Operations**: Streamlined git status and diff output for presentation clarity
+- **Outcome Display**: Enhanced with timing and better formatting
+
+### Notes
+- Perfect for conference demos with `CODE_HEALER_VERBOSE=true` for detailed debugging
+- No API changes; safe minor release
+
+## [0.1.25] - 2025-09-03
+
+### Added
+- PresentationLogger: clean, emoji-labeled, presentation-friendly logs with optional verbose mode (`CODE_HEALER_VERBOSE=true`)
+- HealingJob and ClaudeCodeEvolutionHandler now use PresentationLogger for concise output
+
+### Changed
+- Suppressed noisy prints in core healing flow in favor of high-signal steps and outcomes
+
+### Notes
+- No API changes; safe minor release. Ideal for conference demos.
 
 ### Added
 - **Aggressive File Filtering**: Implemented comprehensive filtering to prevent `tmp/`, `log/`, and other temporary files from being committed

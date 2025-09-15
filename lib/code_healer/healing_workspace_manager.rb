@@ -1,20 +1,18 @@
 require 'fileutils'
 require 'securerandom'
+require_relative 'presentation_logger'
 
 module CodeHealer
   # Manages isolated healing workspaces for safe code evolution
   class HealingWorkspaceManager
     class << self
       def create_healing_workspace(repo_path, branch_name = nil)
-        puts "🏥 [WORKSPACE] Starting workspace creation..."
-        puts "🏥 [WORKSPACE] Repo path: #{repo_path}"
-        puts "🏥 [WORKSPACE] Target branch: #{branch_name || 'default'}"
+        PresentationLogger.workspace_action("Preparing isolated workspace")
+        PresentationLogger.detail("Repo: #{repo_path}")
+        PresentationLogger.detail("Target branch: #{branch_name || 'default'}")
         
         config = CodeHealer::ConfigManager.code_heal_directory_config
-        puts "🏥 [WORKSPACE] Raw config: #{config.inspect}"
-        
         base_path = config['path'] || config[:path] || '/tmp/code_healer_workspaces'
-        puts "🏥 [WORKSPACE] Base heal dir: #{base_path}"
         
         # Use persistent workspace ID based on repo (if enabled)
         if CodeHealer::ConfigManager.persistent_workspaces_enabled?
@@ -28,82 +26,79 @@ module CodeHealer
         end
         
         if CodeHealer::ConfigManager.persistent_workspaces_enabled?
-          puts "🏥 [WORKSPACE] Persistent workspace ID: #{workspace_id}"
+          PresentationLogger.detail("Using persistent workspace: #{workspace_id}")
         else
-          puts "🏥 [WORKSPACE] Temporary workspace ID: #{workspace_id}"
+          PresentationLogger.detail("Creating temporary workspace: #{workspace_id}")
         end
-        puts "🏥 [WORKSPACE] Full workspace path: #{workspace_path}"
         
         begin
-          puts "🏥 [WORKSPACE] Creating base directory..."
           # Ensure code heal directory exists
           FileUtils.mkdir_p(base_path)
-          puts "🏥 [WORKSPACE] Base directory created/verified: #{base_path}"
           
           # Check if workspace already exists
           if Dir.exist?(workspace_path) && Dir.exist?(File.join(workspace_path, '.git'))
             if CodeHealer::ConfigManager.persistent_workspaces_enabled?
-              puts "🏥 [WORKSPACE] Persistent workspace exists, checking out to target branch..."
+              PresentationLogger.detail("Reusing existing workspace, checking out target branch")
               checkout_to_branch(workspace_path, branch_name, repo_path)
             else
-              puts "🏥 [WORKSPACE] Workspace exists but persistent mode disabled, creating new one..."
+              PresentationLogger.detail("Recreating workspace (persistent mode disabled)")
               cleanup_workspace(workspace_path, true)
               create_persistent_workspace(repo_path, workspace_path, branch_name)
             end
           else
-            puts "🏥 [WORKSPACE] Creating new workspace..."
+            PresentationLogger.detail("Creating new workspace")
             create_persistent_workspace(repo_path, workspace_path, branch_name)
           end
           
-          puts "🏥 [WORKSPACE] Workspace ready successfully!"
-          puts "🏥 [WORKSPACE] Final workspace path: #{workspace_path}"
-          puts "🏥 [WORKSPACE] Current branch: #{get_current_branch(workspace_path)}"
+          PresentationLogger.success("Workspace ready")
+          PresentationLogger.detail("Path: #{workspace_path}")
+          PresentationLogger.detail("Branch: #{get_current_branch(workspace_path)}")
           workspace_path
         rescue => e
-          puts "❌ Failed to create/prepare healing workspace: #{e.message}"
+          PresentationLogger.error("Failed to create workspace: #{e.message}")
           # Don't cleanup persistent workspace on error
           raise e
         end
       end
       
       def apply_fixes_in_workspace(workspace_path, fixes, class_name, method_name)
-        puts "🔧 [WORKSPACE] Starting fix application..."
-        puts "🔧 [WORKSPACE] Workspace: #{workspace_path}"
-        puts "🔧 [WORKSPACE] Class: #{class_name}, Method: #{method_name}"
-        puts "🔧 [WORKSPACE] Fixes to apply: #{fixes.inspect}"
+        PresentationLogger.detail("Starting fix application...")
+        PresentationLogger.detail("Workspace: #{workspace_path}")
+        PresentationLogger.detail("Class: #{class_name}, Method: #{method_name}")
+        PresentationLogger.detail("Fixes to apply: #{fixes.inspect}")
         
         begin
-          puts "🔧 [WORKSPACE] Processing #{fixes.length} fixes..."
+          PresentationLogger.detail("Processing #{fixes.length} fixes...")
           # Apply each fix to the workspace
           fixes.each_with_index do |fix, index|
-            puts "🔧 [WORKSPACE] Processing fix #{index + 1}: #{fix.inspect}"
+            PresentationLogger.detail("Processing fix #{index + 1}: #{fix.inspect}")
             file_path = File.join(workspace_path, fix[:file_path])
-            puts "🔧 [WORKSPACE] Target file: #{file_path}"
-            puts "🔧 [WORKSPACE] File exists: #{File.exist?(file_path)}"
+            PresentationLogger.detail("Target file: #{file_path}")
+            PresentationLogger.detail("File exists: #{File.exist?(file_path)}")
             
             next unless File.exist?(file_path)
             
-            puts "🔧 [WORKSPACE] Creating backup..."
+            PresentationLogger.detail("Creating backup...")
             # Backup original file
             backup_file(file_path)
             
-            puts "🔧 [WORKSPACE] Applying fix to file..."
+            PresentationLogger.detail("Applying fix to file...")
             # Apply the fix
             apply_fix_to_file(file_path, fix[:new_code], class_name, method_name)
           end
           
           # Show workspace Git status after applying fixes
           Dir.chdir(workspace_path) do
-            puts "🔧 [WORKSPACE] Git status after fixes:"
+            PresentationLogger.detail("Git status after fixes:")
             system("git status --porcelain")
-            puts "🔧 [WORKSPACE] Git diff after fixes:"
+            PresentationLogger.detail("Git diff after fixes:")
             system("git diff")
           end
           
-          puts "✅ Fixes applied successfully in workspace"
+          PresentationLogger.success("Fixes applied successfully in workspace")
           true
         rescue => e
-          puts "❌ Failed to apply fixes in workspace: #{e.message}"
+          PresentationLogger.error("Failed to apply fixes in workspace: #{e.message}")
           false
         end
       end
@@ -111,42 +106,47 @@ module CodeHealer
       def test_fixes_in_workspace(workspace_path)
         config = CodeHealer::ConfigManager.code_heal_directory_config
         
-        puts "🧪 Testing fixes in workspace: #{workspace_path}"
+        PresentationLogger.step("Validating fixes")
         
         begin
           # Change to workspace directory
           Dir.chdir(workspace_path) do
             # Run basic syntax check
             syntax_check = system("ruby -c #{find_ruby_files.join(' ')} 2>/dev/null")
-            return false unless syntax_check
+            unless syntax_check
+              PresentationLogger.error("Syntax validation failed")
+              return false
+            end
             
-            # Optionally skip heavy tests in demo mode
-            unless CodeHealer::ConfigManager.demo_skip_tests?
+            # Run tests if available
               # Run tests if available
               if File.exist?('Gemfile')
                 bundle_check = system("bundle check >/dev/null 2>&1")
-                return false unless bundle_check
+                unless bundle_check
+                  PresentationLogger.error("Bundle check failed")
+                  return false
+                end
                 
                 # Run tests if RSpec is available
                 if File.exist?('spec') || File.exist?('test')
                   test_result = system("bundle exec rspec --dry-run >/dev/null 2>&1") ||
                                system("bundle exec rake test:prepare >/dev/null 2>&1")
-                  puts "🧪 Test preparation: #{test_result ? '✅' : '⚠️'}"
+                  PresentationLogger.detail("Test preparation: #{test_result ? 'passed' : 'skipped'}")
                 end
               end
             end
             
-            puts "✅ Workspace validation passed"
+            PresentationLogger.success("Validation passed")
             true
           end
         rescue => e
-          puts "❌ Workspace validation failed: #{e.message}"
+          PresentationLogger.error("Validation failed: #{e.message}")
           false
         end
       end
       
       def validate_workspace_for_commit(workspace_path)
-        puts "🔍 [WORKSPACE] Validating workspace for commit..."
+        PresentationLogger.detail("Validating workspace for commit...")
         
         Dir.chdir(workspace_path) do
           # Check for any temporary files that might have been added
@@ -155,44 +155,42 @@ module CodeHealer
           
           all_files = (staged_files + working_files).uniq.reject(&:empty?)
           
-          puts "🔍 [WORKSPACE] Files to be committed: #{all_files.join(', ')}"
+          PresentationLogger.detail("Files to be committed: #{all_files.join(', ')}")
           
           # Check for any temporary files
           temp_files = all_files.select { |file| should_skip_file?(file) }
           
           if temp_files.any?
-            puts "⚠️ [WORKSPACE] WARNING: Temporary files detected in commit:"
-            temp_files.each { |file| puts "   - #{file}" }
+            PresentationLogger.warn("Temporary files detected in commit:")
+            temp_files.each { |file| PresentationLogger.detail("   - #{file}") }
             
             # Remove them from staging
             temp_files.each do |file|
-              puts "🗑️ [WORKSPACE] Removing temporary file from staging: #{file}"
+              PresentationLogger.detail("Removing temporary file from staging: #{file}")
               system("git reset HEAD '#{file}' 2>/dev/null || true")
             end
             
-            puts "🔍 [WORKSPACE] Temporary files removed from staging"
+            PresentationLogger.detail("Temporary files removed from staging")
             return false
           end
           
-          puts "✅ [WORKSPACE] Workspace validation passed - no temporary files detected"
+          PresentationLogger.detail("Workspace validation passed - no temporary files detected")
           return true
         end
       rescue => e
-        puts "❌ [WORKSPACE] Workspace validation failed: #{e.message}"
+        PresentationLogger.error("Workspace validation failed: #{e.message}")
         return false
       end
       
       def create_healing_branch(repo_path, workspace_path, branch_name)
-        puts "🔄 Creating healing branch and PR from isolated workspace"
+        PresentationLogger.git_action("Creating healing branch and PR")
         
         begin
           # All Git operations happen in the isolated workspace
           Dir.chdir(workspace_path) do
-            puts "🌿 [WORKSPACE] Working in isolated workspace: #{workspace_path}"
-            
-            # Debug Git configuration
-            puts "🌿 [WORKSPACE] Git remote origin: #{`git config --get remote.origin.url`.strip}"
-            puts "🌿 [WORKSPACE] Current branch: #{`git branch --show-current`.strip}"
+            PresentationLogger.detail("Working in isolated workspace")
+            PresentationLogger.detail("Remote: #{`git config --get remote.origin.url`.strip}")
+            PresentationLogger.detail("Current branch: #{`git branch --show-current`.strip}")
             
             # Ensure we're on the target branch
             system("git checkout #{branch_name}")
@@ -202,94 +200,80 @@ module CodeHealer
             healing_branch = "code-healer-fix-#{Time.now.to_i}"
             system("git checkout -b #{healing_branch}")
             
-            # Check Git status
-            puts "📊 [WORKSPACE] Git status in workspace:"
-            system("git status --porcelain")
-            
             # Add all changes (the fixes are already applied in the workspace)
             add_only_relevant_files(workspace_path)
             
             # Validate workspace before commit to ensure no temporary files
             unless validate_workspace_for_commit(workspace_path)
-              puts "⚠️ [WORKSPACE] Workspace validation failed, retrying file addition..."
+              PresentationLogger.detail("Retrying file addition after validation")
               add_only_relevant_files(workspace_path)
             end
             
             # Check if there are changes to commit
             if system("git diff --cached --quiet") == false
-              puts "📝 [WORKSPACE] Changes detected, committing to healing branch..."
+              PresentationLogger.detail("Committing changes to healing branch")
               commit_message = "Fix applied by CodeHealer: #{Time.now.strftime('%Y-%m-%d %H:%M:%S')}"
               system("git commit -m '#{commit_message}'")
               
               # Push healing branch from workspace
-              puts "🚀 [WORKSPACE] Pushing healing branch from workspace..."
+              PresentationLogger.detail("Pushing healing branch")
               system("git push origin #{healing_branch}")
               
-              puts "✅ [WORKSPACE] Healing branch created and pushed: #{healing_branch}"
-              puts "🔒 Main repository (#{repo_path}) remains completely untouched"
-              puts "📝 All changes committed in isolated workspace"
+              PresentationLogger.success("Branch created and pushed: #{healing_branch}")
+              PresentationLogger.detail("Main repository remains untouched")
               
-                          # Create pull request if auto-create is enabled
-                          if should_create_pull_request?
-                            puts "🔍 [WORKSPACE] Auto-creating pull request..."
-                            pr_url = create_pull_request(healing_branch, branch_name)
-                            if pr_url
-                              puts "✅ [WORKSPACE] Pull request created: #{pr_url}"
-                            else
-                              puts "⚠️ [WORKSPACE] Failed to create pull request"
-                            end
-                          else
-                            puts "🔍 [WORKSPACE] Review the changes and create a pull request when ready"
-                          end
+              # Create pull request if auto-create is enabled
+              if should_create_pull_request?
+                PresentationLogger.detail("Creating pull request")
+                pr_url = create_pull_request(healing_branch, branch_name)
+                if pr_url
+                  PresentationLogger.success("Pull request created: #{pr_url}")
+                else
+                  PresentationLogger.warn("Failed to create pull request")
+                end
+              else
+                PresentationLogger.info("Review changes and create PR when ready")
+              end
               
               healing_branch
             else
-              puts "⚠️ [WORKSPACE] No changes detected in workspace"
-              puts "🔍 This might indicate that:"
-              puts "   - The fixes were not applied to the workspace"
-              puts "   - There was an issue with the healing process"
+              PresentationLogger.warn("No changes detected in workspace")
+              PresentationLogger.detail("This might indicate fixes were not applied or there was an issue")
               
               # Delete the empty branch
               system("git checkout #{branch_name}")
               system("git branch -D #{healing_branch}")
-              puts "🗑️ [WORKSPACE] Deleted empty healing branch: #{healing_branch}"
+              PresentationLogger.detail("Deleted empty healing branch: #{healing_branch}")
               nil
             end
           end
         rescue => e
-          puts "❌ Failed to create healing branch from workspace: #{e.message}"
+          PresentationLogger.error("Failed to create healing branch: #{e.message}")
           nil
         end
       end
       
       def cleanup_workspace(workspace_path, force = false)
-        puts "🧹 [WORKSPACE] Starting workspace cleanup..."
-        puts "🧹 [WORKSPACE] Target: #{workspace_path}"
-        puts "🧹 [WORKSPACE] Force cleanup: #{force}"
-        puts "🧹 [WORKSPACE] Exists: #{Dir.exist?(workspace_path)}"
-        
         return unless Dir.exist?(workspace_path)
         
         # Check if this is a persistent workspace
         is_persistent = workspace_path.include?('persistent_')
         
         if is_persistent && !force
-          puts "🧹 [WORKSPACE] This is a persistent workspace - skipping cleanup"
-          puts "🧹 [WORKSPACE] Use force=true to override"
+          PresentationLogger.detail("Skipping cleanup of persistent workspace")
           return
         end
+        
+        PresentationLogger.detail("Cleaning up workspace")
         
         # Remove .git directory first to avoid conflicts
         git_dir = File.join(workspace_path, '.git')
         if Dir.exist?(git_dir)
-          puts "🧹 [WORKSPACE] Removing .git directory to prevent conflicts..."
           FileUtils.rm_rf(git_dir)
         end
         
-        puts "🧹 [WORKSPACE] Removing workspace directory..."
         FileUtils.rm_rf(workspace_path)
-        puts "🧹 [WORKSPACE] Workspace cleanup completed"
-        puts "🧹 [WORKSPACE] Directory still exists: #{Dir.exist?(workspace_path)}"
+        PresentationLogger.detail("Workspace cleanup completed")
       end
       
       def cleanup_expired_workspaces
@@ -348,7 +332,23 @@ module CodeHealer
           
           puts "🔗 Creating PR for repository: #{repo_name}"
           
-          client = Octokit::Client.new(access_token: github_token)
+          # Configure Octokit with better error handling
+          client = Octokit::Client.new(
+            access_token: github_token,
+            api_endpoint: 'https://api.github.com',
+            web_endpoint: 'https://github.com',
+            auto_paginate: true,
+            per_page: 100
+          )
+          
+          # Test the connection first
+          begin
+            user = client.user
+            puts "✅ GitHub authentication successful for user: #{user.login}"
+          rescue => auth_error
+            puts "❌ GitHub authentication failed: #{auth_error.message}"
+            return nil
+          end
           
           # Create pull request
           pr = client.create_pull_request(
@@ -363,8 +363,21 @@ module CodeHealer
           
           puts "✅ Pull request created successfully: #{pr.html_url}"
           pr.html_url
+        rescue Octokit::Unauthorized => e
+          puts "❌ GitHub authentication failed: #{e.message}"
+          puts "💡 Check your GitHub token permissions and validity"
+          nil
+        rescue Octokit::NotFound => e
+          puts "❌ Repository not found: #{e.message}"
+          puts "💡 Check repository name and access permissions"
+          nil
+        rescue Octokit::UnprocessableEntity => e
+          puts "❌ Invalid pull request data: #{e.message}"
+          puts "💡 Check branch names and repository state"
+          nil
         rescue => e
           puts "❌ Failed to create pull request: #{e.message}"
+          puts "💡 Error class: #{e.class}"
           puts "💡 Check your GitHub token and repository access"
           nil
         end
@@ -413,66 +426,66 @@ module CodeHealer
       end
 
       def create_persistent_workspace(repo_path, workspace_path, branch_name)
-        puts "🏥 [WORKSPACE] Creating new persistent workspace..."
+        PresentationLogger.detail("Creating new persistent workspace...")
         
         # Get the GitHub remote URL
         Dir.chdir(repo_path) do
           remote_url = `git config --get remote.origin.url`.strip
           if remote_url.empty?
-            puts "❌ [WORKSPACE] No remote origin found in #{repo_path}"
+            PresentationLogger.error("No remote origin found in #{repo_path}")
             return false
           end
           
-          puts "🏥 [WORKSPACE] Cloning from: #{remote_url}"
-          puts "🏥 [WORKSPACE] To workspace: #{workspace_path}"
+          PresentationLogger.detail("Cloning from: #{remote_url}")
+          PresentationLogger.detail("To workspace: #{workspace_path}")
           
           # Clone the full repository for persistent use
           result = system("git clone #{remote_url} #{workspace_path}")
           if result
-            puts "🏥 [WORKSPACE] Repository cloned successfully"
+            PresentationLogger.detail("Repository cloned successfully")
             # Now checkout to the target branch
             checkout_to_branch(workspace_path, branch_name, repo_path)
           else
-            puts "❌ [WORKSPACE] Failed to clone repository"
+            PresentationLogger.error("Failed to clone repository")
             return false
           end
         end
       end
 
       def checkout_to_branch(workspace_path, branch_name, repo_path)
-        puts "🏥 [WORKSPACE] Checking out to target branch..."
+        PresentationLogger.detail("Checking out to target branch...")
         
         # Determine target branch
         target_branch = branch_name || CodeHealer::ConfigManager.pr_target_branch || get_default_branch(repo_path)
-        puts "🏥 [WORKSPACE] Target branch: #{target_branch}"
+        PresentationLogger.detail("Target branch: #{target_branch}")
         
         Dir.chdir(workspace_path) do
           # Fetch latest changes
-          puts "🏥 [WORKSPACE] Fetching latest changes..."
+          PresentationLogger.detail("Fetching latest changes...")
           system("git fetch origin")
           
           # Check if branch exists locally
           local_branch_exists = system("git show-ref --verify --quiet refs/heads/#{target_branch}")
           
           if local_branch_exists
-            puts "🏥 [WORKSPACE] Checking out existing local branch: #{target_branch}"
+            PresentationLogger.detail("Checking out existing local branch: #{target_branch}")
             system("git checkout #{target_branch}")
           else
-            puts "🏥 [WORKSPACE] Checking out remote branch: #{target_branch}"
+            PresentationLogger.detail("Checking out remote branch: #{target_branch}")
             system("git checkout -b #{target_branch} origin/#{target_branch}")
           end
           
           # Pull latest changes
-          puts "🏥 [WORKSPACE] Pulling latest changes..."
+          PresentationLogger.detail("Pulling latest changes...")
           system("git pull origin #{target_branch}")
           
           # Ensure workspace is clean
-          puts "🏥 [WORKSPACE] Ensuring workspace is clean..."
+          PresentationLogger.detail("Ensuring workspace is clean...")
           system("git reset --hard HEAD")
           system("git clean -fd")
           
           # Remove any tracked temporary files that shouldn't be committed - AGGRESSIVE cleanup
-          puts "🏥 [WORKSPACE] Removing tracked temporary files..."
+          PresentationLogger.detail("Removing tracked temporary files...")
           
           # Remove root level temporary directories
           system("git rm -r --cached tmp/ 2>/dev/null || true")
@@ -492,7 +505,7 @@ module CodeHealer
           system("find . -name '*.log' -exec git rm --cached {} + 2>/dev/null || true")
           system("find . -name '*.cache' -exec git rm --cached {} + 2>/dev/null || true")
           
-          puts "🏥 [WORKSPACE] Successfully checked out to: #{target_branch}"
+          PresentationLogger.detail("Successfully checked out to: #{target_branch}")
         end
       end
 
@@ -518,25 +531,26 @@ module CodeHealer
       end
 
       def add_only_relevant_files(workspace_path)
-        puts "📁 [WORKSPACE] Adding only relevant files, respecting .gitignore..."
+        PresentationLogger.detail("Adding only relevant files, respecting .gitignore...")
         
         Dir.chdir(workspace_path) do
           # First, ensure .gitignore is respected
           if File.exist?('.gitignore')
-            puts "📁 [WORKSPACE] Using repository's .gitignore file"
+            PresentationLogger.detail("Using repository's .gitignore file")
           else
-            puts "📁 [WORKSPACE] No .gitignore found, using default patterns"
+            PresentationLogger.detail("No .gitignore found, using default patterns")
           end
           
           # Get list of modified files
           modified_files = `git status --porcelain | grep '^ M\\|^M \\|^A ' | awk '{print $2}'`.strip.split("\n")
+
           
           if modified_files.empty?
-            puts "📁 [WORKSPACE] No modified files to add"
+            PresentationLogger.detail("No modified files to add")
             return
           end
           
-          puts "📁 [WORKSPACE] Modified files: #{modified_files.join(', ')}"
+          PresentationLogger.detail("Modified files: #{modified_files.join(', ')}")
           
           # Add each modified file individually
           modified_files.each do |file|
@@ -544,15 +558,15 @@ module CodeHealer
             
             # Skip temporary and generated files
             if should_skip_file?(file)
-              puts "📁 [WORKSPACE] Skipping temporary file: #{file}"
+              PresentationLogger.detail("Skipping temporary file: #{file}")
               next
             end
             
-            puts "📁 [WORKSPACE] Adding file: #{file}"
+            PresentationLogger.detail("Adding file: #{file}")
             system("git add '#{file}'")
           end
           
-          puts "📁 [WORKSPACE] File addition completed"
+          PresentationLogger.detail("File addition completed")
         end
       end
 
@@ -609,7 +623,7 @@ module CodeHealer
         
         # Additional check: if path contains 'tmp' or 'log' anywhere, skip it
         if file_path.include?('tmp') || file_path.include?('log')
-          puts "📁 [WORKSPACE] Skipping file containing 'tmp' or 'log': #{file_path}"
+          PresentationLogger.detail("Skipping file containing 'tmp' or 'log': #{file_path}")
           return true
         end
         

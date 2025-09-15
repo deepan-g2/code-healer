@@ -414,34 +414,7 @@ evolution_method = case evolution_method.downcase
 
 fallback_to_api = ask_for_yes_no("Fallback to API if Claude Code fails?", default: true)
 
-# Demo Mode Configuration
-puts
-puts "🎭 Demo Mode Configuration:"
-puts "Demo mode optimizes CodeHealer for fast demonstrations and presentations:"
-puts "- Skips test generation for faster response times"
-puts "- Skips pull request creation for immediate results"
-puts "- Uses optimized Claude prompts for quick fixes"
-puts
-
-enable_demo_mode = ask_for_yes_no("Enable demo mode for fast demonstrations?", default: false)
-
-demo_config = {}
-if enable_demo_mode
-  demo_config[:skip_tests] = ask_for_yes_no("Skip test generation in demo mode?", default: true)
-
-  
-  puts
-  puts "🚀 Demo mode will significantly speed up healing operations!"
-  puts "   Perfect for conference talks and live demonstrations."
-  
-  # Add demo-specific instructions
-  puts
-  puts "📋 Demo Mode Features:"
-  puts "   - Timeout reduced to 60 seconds for quick responses"
-  puts "   - Sticky workspace enabled for faster context loading"
-  puts "   - Claude session persistence for better performance"
-  puts "   - Tests skipped for immediate results (PRs still created)"
-end
+ 
 
 # Create configuration files
 puts
@@ -481,13 +454,6 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
     # CodeHealer Configuration
     enabled: true
     
-    # Allowed classes for healing (customize as needed)
-    allowed_classes:
-      - User
-      - Order
-      - PaymentProcessor
-      - OrderProcessor
-    
     # Excluded classes (never touch these)
     excluded_classes:
       - ApplicationController
@@ -513,9 +479,9 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
     # Claude Code Terminal Configuration
     claude_code:
       enabled: #{evolution_method == 'claude_code_terminal' || evolution_method == 'hybrid'}
-      timeout: #{enable_demo_mode ? 60 : 300}  # Shorter timeout for demo mode
+      timeout: 300
       max_file_changes: 10
-      include_tests: #{!enable_demo_mode || !demo_config[:skip_tests]}
+      include_tests: true
       persist_session: true  # Keep Claude session alive for faster responses
       ignore:
         - "tmp/"
@@ -608,15 +574,15 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
     max_evolutions_per_day: 10
     
     # Notification Configuration (optional)
+    # Test-Fix Iteration Configuration
+    test_fix:
+      max_iterations: 2
     notifications:
       enabled: false
       slack_webhook: ""
       email_notifications: false
     
-    # Demo Mode Configuration
-    demo:
-      enabled: #{enable_demo_mode}
-      skip_tests: #{demo_config[:skip_tests] || false}
+    
     
     # Performance Configuration
     performance:
@@ -631,7 +597,7 @@ create_file_with_content('.env', env_content, dry_run: options[:dry_run])
       cleanup_after_hours: #{cleanup_after_hours}
       max_workspaces: 10
       clone_strategy: "branch"  # Options: branch, full_repo
-      sticky_workspace: #{enable_demo_mode}  # Reuse workspace for faster demo responses
+      sticky_workspace: false
 YAML
 
 create_file_with_content('config/code_healer.yml', config_content, dry_run: options[:dry_run])
@@ -711,9 +677,7 @@ puts
   puts "   - Your code will be cloned to: #{code_heal_directory}"
   puts "   - This ensures safe, isolated healing without affecting your running server"
   puts "   - Workspaces are automatically cleaned up after #{cleanup_after_hours} hours"
-  if enable_demo_mode
-    puts "   - Demo mode: Sticky workspace enabled for faster context loading"
-  end
+  
 puts
 puts "⚙️  Configuration:"
 puts "   - code_healer.yml contains comprehensive settings with sensible defaults"

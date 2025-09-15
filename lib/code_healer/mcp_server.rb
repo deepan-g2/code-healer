@@ -1,5 +1,6 @@
 require_relative 'mcp_tools'
 require_relative 'mcp_prompts'
+require_relative 'presentation_logger'
 
 module CodeHealer
   class McpServer
@@ -45,7 +46,7 @@ module CodeHealer
       end
       
       def analyze_error(error, context)
-        puts "🧠 MCP analyzing error: #{error.class} - #{error.message}"
+        PresentationLogger.detail("MCP analyzing error: #{error.class} - #{error.message}")
         
         # Extract class and method names from context
         class_name = context[:class_name] || 'UnknownClass'
@@ -61,11 +62,11 @@ module CodeHealer
             server_context: { codebase_context: context }
           )
           
-          puts "✅ MCP analysis complete"
+          PresentationLogger.detail("MCP analysis complete")
           # Parse the JSON response from MCP tool
           JSON.parse(result.content.first[:text])
         else
-          puts "⚠️  ErrorAnalysisTool not available, using fallback analysis"
+          PresentationLogger.detail("ErrorAnalysisTool not available, using fallback analysis")
           # Fallback analysis
           {
             severity: 'medium',
@@ -78,13 +79,13 @@ module CodeHealer
       end
       
       def generate_contextual_fix(error, analysis, context)
-        puts "🧠 MCP generating contextual fix..."
+        PresentationLogger.detail("MCP generating contextual fix...")
         
         # Extract class and method names from context
         class_name = context[:class_name] || 'UnknownClass'
         method_name = context[:method_name] || 'unknown_method'
         
-        puts "🔍 Debug: class_name = #{class_name}, method_name = #{method_name}"
+        PresentationLogger.detail("Debug: class_name = #{class_name}, method_name = #{method_name}")
         
         # Use MCP tool to generate fix
         if defined?(CodeFixTool)
@@ -101,11 +102,11 @@ module CodeHealer
             }
           )
           
-          puts "✅ MCP generated intelligent fix"
+          PresentationLogger.detail("MCP generated intelligent fix")
           # Parse the JSON response from MCP tool
           JSON.parse(result.content.first[:text])
         else
-          puts "⚠️  CodeFixTool not available, using fallback fix generation"
+          PresentationLogger.detail("CodeFixTool not available, using fallback fix generation")
           # Fallback fix generation
           generate_fallback_fix(error, class_name, method_name)
         end

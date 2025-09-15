@@ -1,5 +1,6 @@
 require 'sidekiq'
 require 'open3'
+require_relative 'presentation_logger'
 
 module CodeHealer
   class HealingJob
@@ -8,15 +9,15 @@ module CodeHealer
     sidekiq_options retry: 3, backtrace: true, queue: 'evolution'
 
     def perform(*args)
-      puts "🚀 [HEALING_JOB] Starting job with args: #{args.inspect}"
-      
+      start_time = Time.now
+      PresentationLogger.section("CodeHealer – Healing Job")
 
-      
       # Support both legacy and new invocation styles
       error, class_name, method_name, evolution_method, backtrace = parse_args(args)
-      
-      puts "🚀 [HEALING_JOB] Parsed args - Error: #{error.class}, Class: #{class_name}, Method: #{method_name}, Evolution: #{evolution_method}"
-      puts "🚀 [HEALING_JOB] Backtrace length: #{backtrace&.length || 0}"
+      PresentationLogger.kv("Error", "#{error.class}: #{error.message}")
+      PresentationLogger.kv("Target", "#{class_name}##{method_name}")
+      PresentationLogger.kv("Strategy", evolution_method)
+      PresentationLogger.backtrace(backtrace)
 
       # Track start metric
       healing_id = MetricsCollector.generate_healing_id
@@ -30,13 +31,13 @@ module CodeHealer
       )
       MetricsCollector.track_error_occurrence(healing_id, Time.current)
 
-      puts "🚀 Evolution Job Started: #{class_name}##{method_name}"
+      PresentationLogger.success("Healing started for #{class_name}##{method_name}")
 
-      puts "🏥 [HEALING_JOB] About to create isolated healing workspace..."
+      PresentationLogger.step("Creating isolated healing workspace")
       # Create isolated healing workspace
       workspace_path = create_healing_workspace(class_name, method_name)
       MetricsCollector.track_workspace_creation(healing_id, workspace_path)
-      puts "🏥 [HEALING_JOB] Workspace created: #{workspace_path}"
+      PresentationLogger.kv("Workspace", workspace_path)
       
       ai_time_ms = nil
       git_time_ms = nil
@@ -46,7 +47,7 @@ module CodeHealer
       failure_reason = nil
 
       begin
-        puts "🔧 [HEALING_JOB] About to apply fixes in isolated environment..."
+        PresentationLogger.step("Applying fixes in isolated environment")
         # Apply fixes in isolated environment
         ai_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         success = apply_fixes_in_workspace(workspace_path, error, class_name, method_name, evolution_method)
@@ -83,17 +84,18 @@ module CodeHealer
                 false   # pr_created
               )
               overall_success = true
-              puts "✅ Fixes applied, tested, and merged successfully! Branch: #{healing_branch}"
+              PresentationLogger.success("Fixes applied and validated")
+              PresentationLogger.kv("Branch", healing_branch)
             else
               overall_success = false
               failure_reason ||= 'healing_branch_creation_failed'
-              puts "⚠️  Fixes applied and tested, but merge failed"
+              PresentationLogger.warn("Fixes applied and tested, but merge failed")
             end
           else
             overall_success = false
             syntax_valid = false
             failure_reason ||= 'workspace_tests_failed_or_syntax_error'
-            puts "⚠️  Fixes applied but failed tests, not merging back"
+            PresentationLogger.warn("Fixes applied but validation failed; skipping merge")
           end
         else
           overall_success = false
@@ -105,7 +107,7 @@ module CodeHealer
             ai_provider_for(evolution_method),
             failure_reason
           )
-          puts "❌ Failed to apply fixes in workspace"
+          PresentationLogger.error("Failed to apply fixes in workspace")
         end
       ensure
         # Persist timing metrics if captured
@@ -122,10 +124,12 @@ module CodeHealer
         cleanup_workspace(workspace_path)
       end
 
-      puts "✅ Evolution Job Completed: #{class_name}##{method_name}"
+      total_time = ((Time.now - start_time) * 1000).round
+      timing = "#{total_time}ms total"
+      PresentationLogger.outcome(success: overall_success, branch: healing_branch, pr_url: nil, reason: failure_reason, timing: timing)
     rescue => e
-      puts "❌ Evolution Job Failed: #{e.message}"
-      puts "📍 Backtrace: #{e.backtrace.first(5)}"
+      PresentationLogger.error("Evolution Job Failed: #{e.message}")
+      PresentationLogger.detail("Backtrace: #{Array(e.backtrace).first(5).join("\n")}")
       raise e  # Re-raise to trigger Sidekiq retry
     end
 
@@ -222,7 +226,7 @@ module CodeHealer
     end
 
     def create_healing_workspace(class_name, method_name)
-      puts "🏥 Creating isolated healing workspace for #{class_name}##{method_name}"
+      PresentationLogger.detail("Preparing workspace for #{class_name}##{method_name}")
 
       # Create persistent workspace and checkout to target branch
       workspace_path = CodeHealer::HealingWorkspaceManager.create_healing_workspace(
@@ -230,12 +234,12 @@ module CodeHealer
         CodeHealer::ConfigManager.pr_target_branch  # Use configured target branch
       )
 
-      puts "✅ Healing workspace ready: #{workspace_path}"
+      PresentationLogger.detail("Workspace ready: #{workspace_path}")
       workspace_path
     end
 
     def apply_fixes_in_workspace(workspace_path, error, class_name, method_name, evolution_method)
-      puts "🔧 Applying fixes in isolated workspace"
+      PresentationLogger.detail("Applying fixes in workspace #{workspace_path}")
 
       case evolution_method
       when 'claude_code_terminal'
@@ -251,13 +255,13 @@ module CodeHealer
         end
         handle_api_evolution_in_workspace(workspace_path, error, class_name, method_name)
       else
-        puts "❌ Unknown evolution method: #{evolution_method}"
+        PresentationLogger.error("Unknown evolution method: #{evolution_method}")
         false
       end
     end
 
     def handle_claude_code_evolution_in_workspace(workspace_path, error, class_name, method_name)
-      puts "🤖 Using Claude Code Terminal for evolution in workspace..."
+      PresentationLogger.step("Claude Code Terminal evolution")
 
       # Change to workspace directory for Claude Code operations
       Dir.chdir(workspace_path) do
@@ -266,17 +270,17 @@ module CodeHealer
         )
 
         if success
-          puts "✅ Claude Code evolution completed successfully in workspace!"
+          PresentationLogger.success("Claude evolution succeeded")
           true
         else
-          puts "❌ Claude Code evolution failed in workspace"
+          PresentationLogger.error("Claude evolution failed")
           false
         end
       end
     end
 
     def handle_api_evolution_in_workspace(workspace_path, error, class_name, method_name)
-      puts "🌐 Using OpenAI API for evolution in workspace..."
+      PresentationLogger.step("OpenAI API evolution")
 
       # Load business context for API evolution
       business_context = CodeHealer::BusinessContextManager.get_context_for_error(
@@ -286,7 +290,7 @@ module CodeHealer
       # Optionally record business context used
       # MetricsCollector.track_business_context(healing_id, business_context) # healing_id not accessible here
 
-      puts "📋 Business context loaded for API evolution"
+      PresentationLogger.detail("Business context loaded for API evolution")
 
       # Change to workspace directory for API operations
       Dir.chdir(workspace_path) do
@@ -295,10 +299,10 @@ module CodeHealer
         )
 
         if success
-          puts "✅ API evolution completed successfully in workspace!"
+          PresentationLogger.success("API evolution succeeded")
           true
         else
-          puts "❌ API evolution failed in workspace"
+          PresentationLogger.error("API evolution failed")
           false
         end
       end
@@ -307,7 +311,7 @@ module CodeHealer
     def cleanup_workspace(workspace_path)
       return unless workspace_path && Dir.exist?(workspace_path)
 
-      puts "🧹 Cleaning up healing workspace: #{workspace_path}"
+      PresentationLogger.step("Cleaning up workspace")
       CodeHealer::HealingWorkspaceManager.cleanup_workspace(workspace_path)
     end
 

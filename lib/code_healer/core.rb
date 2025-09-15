@@ -1,6 +1,7 @@
 require 'logger'
 require 'git'
 require 'octokit'
+require_relative 'presentation_logger'
 
 module CodeHealer
   class Core
@@ -180,15 +181,25 @@ module CodeHealer
       end
       
       def patch_classes_for_evolution
-        # Get allowed classes from config
-        allowed_classes = CodeHealer::ConfigManager.allowed_classes
-        
-        allowed_classes.each do |class_name|
-          begin
-            klass = class_name.constantize
-            patch_class_for_evolution(klass)
-          rescue NameError => e
-            puts "⚠️  Could not load class #{class_name}: #{e.message}"
+        # Patch all autoloaded classes except excluded ones
+        excluded = CodeHealer::ConfigManager.excluded_classes
+        # Attempt to iterate over loaded application classes
+        if defined?(Rails) && Rails.application
+          app_paths = [Rails.root.join('app', 'models'), Rails.root.join('app', 'controllers')]
+          app_paths.each do |path|
+            Dir.glob(File.join(path.to_s, '**', '*.rb')).each do |file|
+              begin
+                relative = file.sub(Rails.root.join('app').to_s + '/', '')
+                class_name = relative.gsub('.rb', '').split('/').map(&:classify).join('::')
+                next if class_name.nil? || class_name.empty?
+                next if excluded.include?(class_name)
+                klass = class_name.constantize rescue nil
+                next unless klass.is_a?(Class) || klass.is_a?(Module)
+                patch_class_for_evolution(klass)
+              rescue => e
+                puts "⚠️  Skipping #{file}: #{e.message}"
+              end
+            end
           end
         end
       end
@@ -229,26 +240,26 @@ module CodeHealer
         def extract_from_backtrace(backtrace)
           return [nil, nil] unless backtrace
           
-          puts "🔍 DEBUG: Starting backtrace analysis..."
-          puts "🔍 DEBUG: First 5 backtrace lines:"
-          backtrace.first(5).each_with_index { |line, i| puts "  #{i}: #{line}" }
+          PresentationLogger.detail("Starting backtrace analysis...")
+          PresentationLogger.detail("First 5 backtrace lines:")
+          backtrace.first(5).each_with_index { |line, i| PresentationLogger.detail("  #{i}: #{line}") }
           
           # Use the exact working implementation from SelfRuby
           core_methods = %w[* + - / % ** == != < > <= >= <=> === =~ !~ & | ^ ~ << >> [] []= `]
           app_file_line = backtrace.find { |line| line.include?('/app/') }
           return [nil, nil] unless app_file_line
           
-          puts "🔍 DEBUG: Found app file line: #{app_file_line}"
+          PresentationLogger.detail("Found app file line: #{app_file_line}")
           
           if app_file_line =~ /(.+):(\d+):in `(.+)'/
             file_path = $1
             method_name = $3
             
-            puts "🔍 DEBUG: Extracted file_path=#{file_path}, method_name=#{method_name}"
+            PresentationLogger.detail("Extracted file_path=#{file_path}, method_name=#{method_name}")
             
             # If it's a core method, look deeper in the backtrace
             if core_methods.include?(method_name)
-              puts "🔍 DEBUG: #{method_name} is a core method, looking deeper..."
+              PresentationLogger.detail("#{method_name} is a core method, looking deeper...")
               deeper_app_line = backtrace.find do |line| 
                 line.include?('/app/') && 
                 line =~ /in `(.+)'/ && 
@@ -260,14 +271,14 @@ module CodeHealer
               end
               
               if deeper_app_line
-                puts "🔍 DEBUG: Found deeper app line: #{deeper_app_line}"
+                PresentationLogger.detail("Found deeper app line: #{deeper_app_line}")
                 if deeper_app_line =~ /(.+):(\d+):in `(.+)'/
                   file_path = $1
                   method_name = $3
-                  puts "🔍 DEBUG: Updated to file_path=#{file_path}, method_name=#{method_name}"
+                  PresentationLogger.detail("Updated to file_path=#{file_path}, method_name=#{method_name}")
                 end
               else
-                puts "🔍 DEBUG: No deeper app line found"
+                PresentationLogger.detail("No deeper app line found")
               end
             end
             
@@ -279,7 +290,7 @@ module CodeHealer
               method_name.include?('reduce') ||
               method_name.include?('sum')
             )
-              puts "🔍 DEBUG: #{method_name} is a block/iterator, looking for containing method..."
+              PresentationLogger.detail("#{method_name} is a block/iterator, looking for containing method...")
               # Look for the FIRST valid method in the backtrace, not just any method
               containing_line = backtrace.find do |line|
                 line.include?('/app/') && 
@@ -294,14 +305,14 @@ module CodeHealer
               end
               
               if containing_line
-                puts "🔍 DEBUG: Found containing line: #{containing_line}"
+                PresentationLogger.detail("Found containing line: #{containing_line}")
                 if containing_line =~ /(.+):(\d+):in `(.+)'/
                   file_path = $1
                   method_name = $3
-                  puts "🔍 DEBUG: Updated to file_path=#{file_path}, method_name=#{method_name}"
+                  PresentationLogger.detail("Updated to file_path=#{file_path}, method_name=#{method_name}")
                 end
               else
-                puts "🔍 DEBUG: No containing line found"
+                PresentationLogger.detail("No containing line found")
               end
             end
             
@@ -320,13 +331,13 @@ module CodeHealer
                 end
               end
               
-              puts "🔍 DEBUG: Final result - class_name=#{class_name}, method_name=#{method_name}"
-              puts "🔍 Extracted: #{class_name}##{method_name} from #{file_path}"
+              PresentationLogger.detail("Final result - class_name=#{class_name}, method_name=#{method_name}")
+              PresentationLogger.detail("Extracted: #{class_name}##{method_name} from #{file_path}")
               return [class_name, method_name]
             end
           end
           
-          puts "🔍 DEBUG: No valid method found in backtrace"
+          PresentationLogger.detail("No valid method found in backtrace")
           [nil, nil]
         end
         

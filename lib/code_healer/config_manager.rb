@@ -34,8 +34,9 @@ module CodeHealer
         config['allowed_error_types'] || []
       end
 
+      # Deprecated: allowed classes are no longer used. We rely solely on excluded_classes.
       def allowed_classes
-        config['allowed_classes'] || []
+        []
       end
 
       def excluded_classes
@@ -45,8 +46,7 @@ module CodeHealer
       def can_evolve_class?(class_name)
         return false unless enabled?
         return false if excluded_classes.include?(class_name)
-        return true if allowed_classes.empty?
-        allowed_classes.include?(class_name)
+        true
       end
 
       def can_handle_error?(error)
@@ -80,6 +80,15 @@ module CodeHealer
       # Claude Code Configuration
       def claude_code_settings
         config['claude_code'] || {}
+      end
+
+      # Test-fix iteration settings
+      def test_fix_settings
+        config['test_fix'] || {}
+      end
+
+      def max_test_fix_iterations
+        (test_fix_settings['max_iterations'] || 2).to_i
       end
 
       def claude_persist_session?
@@ -162,21 +171,6 @@ module CodeHealer
       def api_settings
         config['api'] || {}
       end
-
-      # Demo Configuration
-      def demo_settings
-        config['demo'] || {}
-      end
-
-      def demo_mode?
-        demo_settings['enabled'] == true
-      end
-
-      def demo_skip_tests?
-        demo_mode? && demo_settings['skip_tests'] != false
-      end
-
-
 
       def git_settings
         config['git'] || {}
@@ -337,7 +331,6 @@ module CodeHealer
           'max_evolutions_per_day' => 10,
           'auto_generate_tests' => true,
           'allowed_error_types' => ['ZeroDivisionError', 'NoMethodError', 'ArgumentError', 'TypeError'],
-          'allowed_classes' => ['User', 'Order', 'PaymentProcessor'],
           'excluded_classes' => ['ApplicationController', 'ApplicationRecord', 'ApplicationJob', 'ApplicationMailer'],
           'evolution_strategy' => {
             'method' => 'api',
@@ -355,6 +348,9 @@ module CodeHealer
               'spec/business_context_specs.rb'
             ]
           },
+          'test_fix' => {
+            'max_iterations' => 2
+          },
           'business_context' => {
             'enabled' => true,
             'sources' => ['docs/business_rules.md']
@@ -365,10 +361,7 @@ module CodeHealer
             'max_tokens' => 2000,
             'temperature' => 0.1
           },
-          'demo' => {
-            'enabled' => false,
-            'skip_tests' => true
-          },
+          
           'git' => {
             'auto_commit' => true,
             'auto_push' => true,
